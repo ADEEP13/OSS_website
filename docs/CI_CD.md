@@ -218,16 +218,24 @@ bash .github/branch-protection/apply.sh             # apply
 bash .github/branch-protection/apply.sh --remove    # remove
 ```
 
-**This needs a personal access token, not a GitHub App token.** `apply.sh`
-probes for write access before it touches anything, because a GitHub App
-installation token with "Administration: read" passes a read probe and then
-fails with `Resource not accessible by integration (HTTP 403)` on the actual
-POST — leaving you with a validated payload that cannot be applied and no
-indication of why. If you hit that, either authenticate with a classic PAT
-carrying the `repo` scope, or import the ruleset by hand:
+**This cannot be done with a GitHub App installation token.** `apply.sh`
+probes for write access before it touches anything and prints the diagnosis,
+because the failure mode is genuinely confusing: the token reports `admin: true`
+on the repository and still gets `Resource not accessible by integration (HTTP
+403)` on every ruleset, branch-protection and repository-settings endpoint.
 
-> **Settings → Rules → Rulesets → New ruleset → Import a ruleset**, then paste
-> the contents of `.github/branch-protection/ruleset.json`.
+The reason is that the missing permission is on the **App**, not on the account.
+Granting the account write access to the repository changes nothing — the App
+configuration is what has to carry the permission. Three ways forward:
+
+| Option | How | Keeps automation working? |
+|---|---|---|
+| **A** | Org Settings → Developer settings → GitHub Apps → *your app* → Permissions & events → Repository permissions → **Administration: Read and write** → Save → an org owner approves | **Yes** |
+| **B** | `gh auth logout && gh auth login` with a classic PAT carrying the `repo` scope, then re-run `apply.sh` | No, one-shot |
+| **C** | Settings → Rules → Rulesets → New ruleset → **Import a ruleset**, paste `.github/branch-protection/ruleset.json` | No, one-shot |
+
+Option A is the only one that lets a workflow or future automation change the
+ruleset on its own.
 
 Everything else in the pipeline works without this step. The ruleset is what
 makes the checks *mandatory*; until it is applied, a contributor with push

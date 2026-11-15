@@ -95,25 +95,41 @@ if ! write_probe; then
   cat >&2 <<'MSG'
 apply: this token cannot administer repository rulesets.
 
-The ruleset payload is ready and validated; it just cannot be applied with
-the current credential. This is almost always one of:
+The payload in ruleset.json is valid and ready. The blocker is the credential,
+not the configuration.
 
-  1. GH_TOKEN is a GitHub App installation token. Installation tokens get
-     `Resource not accessible by integration (HTTP 403)` on rulesets even when
-     the app has admin permission on the repository. Use a personal access
-     token instead.
+DIAGNOSIS
+  The error is `Resource not accessible by integration`, and
+  `GET /installation/repositories` is also unreachable. That combination means
+  GH_TOKEN is a GitHub App installation token, and the app does not hold the
+  "Administration" repository permission.
 
-  2. The token is a fine-grained PAT without repository "Administration: write".
+  Granting the account write access to the repository does NOT fix this. The
+  token already reports admin:true on the repo — the missing permission is on
+  the App itself, and only the App's configuration can grant it.
 
-What to do:
+THREE WAYS TO FIX IT
 
-  gh auth logout
-  gh auth login          # choose: HTTPS + token, classic PAT with `repo` scope
-  bash .github/branch-protection/apply.sh
+  A. Give the GitHub App the Administration permission (keeps automation
+     working, including from CI and from this pipeline):
+       1. Organisation Settings → Developer settings → GitHub Apps
+       2. Select the app this token belongs to
+       3. Permissions & events → Repository permissions
+       4. Set "Administration" to "Read and write" → Save changes
+       5. An organisation owner must approve the updated permission request
+       6. Re-run this script
 
-Or apply it in the web UI:
-  Settings → Rules → Rulesets → New ruleset → Import a ruleset
-  and paste the contents of .github/branch-protection/ruleset.json.
+  B. Run it once with a personal access token (fastest, no org changes):
+       gh auth logout
+       gh auth login          # HTTPS + token, classic PAT with `repo` scope
+       bash .github/branch-protection/apply.sh
+
+  C. Import it through the web UI (no token needed at all):
+       Settings → Rules → Rulesets → New ruleset → Import a ruleset
+       then paste the contents of .github/branch-protection/ruleset.json
+
+Note that A is the only option that lets a workflow or a future automation
+apply ruleset changes on its own. B and C are one-shot.
 
 Nothing else in the pipeline depends on this script. The workflows, hooks and
 checks all work without it; the ruleset is what makes them mandatory.
