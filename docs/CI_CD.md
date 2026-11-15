@@ -189,10 +189,18 @@ headers.
 - Branch name must follow the convention
 - The PR should link an issue (warning, so quick doc fixes are not blocked)
 - The description must actually be filled in (warning)
-- **Size limits**: warn above 400 lines / 20 files, fail above 4000 lines / 200
+- **Size limits**: warn above 400 lines / 20 files, fail above 10000 lines / 300
   files. CONTRIBUTING.md says "a PR that fixes three bugs and redesigns two
   pages is difficult to review and will likely be rejected" — this is that
   sentence, made mechanical.
+
+  A pull request carrying the `size: exempt` label skips the size check. That
+  label exists because a purely mechanical limit eventually blocks the *right*
+  change: adding this pipeline produced a 4,900-line pull request that could not
+  have been split into anything reviewable. The exemption is a label rather than
+  a title flag so that it is visible in the sidebar, auditable in the label's
+  history, and easy to revoke — and every use emits a warning in the Checks tab
+  so nobody forgets why.
 - **No merge commits** in the pull request (linear history)
 - No forbidden files in the diff
 

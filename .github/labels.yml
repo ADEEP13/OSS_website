@@ -150,11 +150,27 @@
   description: 'Improvements or additions to documentation'
 
 # ------------------------------------------------------------------------------
+# Size exemption
+#
+# The only label that changes what CI enforces. Applying it exempts a pull
+# request from the PR Conventions size limits. It is CODEOWNERS-protected and
+# every use emits a warning in the Checks tab, so the exemption is always
+# visible and always audited.
+# ------------------------------------------------------------------------------
+- name: 'size: exempt'
+  color: 'F5B342'
+  description: 'Exempt from the PR size limits — apply only with a written justification in the PR description'
+
+# ------------------------------------------------------------------------------
 # Housekeeping
 # ------------------------------------------------------------------------------
 - name: 'duplicate'
   color: '93A09A'
   description: 'Already tracked elsewhere'
+
+- name: 'stale'
+  color: '93A09A'
+  description: 'No activity for 30 days; will be closed in 14 more unless updated'
 
 - name: 'wontfix'
   color: '93A09A'

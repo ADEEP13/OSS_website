@@ -130,8 +130,28 @@ jobs:
           # Actions in 2022 and to actionlint in v1.6.30). `vars` is valid in
           # jobs.<job_id>.env and jobs.<job_id>.environment; the pinned binary
           # understands it, but the ignore keeps this check green everywhere.
-          ./actionlint -color -shellcheck= -pyflakes= \
-            -ignore 'undefined variable "vars"'
+          #
+          # Findings are re-emitted as ::error:: annotations. Without this, a
+          # failure shows up only as "Process completed with exit code 1" in the
+          # Checks tab, which tells a maintainer nothing about what to fix.
+          set +e
+          output="$(./actionlint -oneline -shellcheck= -pyflakes= \
+                      -ignore 'undefined variable "vars"' 2>&1)"
+          rc=$?
+          set -e
+          printf '%s\n' "$output"
+          if [ "$rc" -ne 0 ]; then
+            printf '%s\n' "$output" | grep -E '^[^[:space:]]+:[0-9]+:[0-9]+:' | \
+            while IFS= read -r finding; do
+              file="${finding%%:*}"
+              rest="${finding#*:}"
+              line="${rest%%:*}"
+              echo "::error file=$file,line=$line::$finding"
+            done
+            echo "::error::actionlint reported $rc issue(s). See the annotations above for the file and line."
+            exit "$rc"
+          fi
+          echo "actionlint: all workflows are structurally valid."
 
       - name: Validate CODEOWNERS
         run: |
@@ -178,10 +198,15 @@ jobs:
     if: github.event_name == 'pull_request'
     timeout-minutes: 15
     steps:
-      - name: Checkout repository
+      # `actions/checkout` on a pull_request event checks out refs/pull/N/merge
+      # by default — a synthetic merge commit GitHub creates for the PR. That
+      # makes every linear-history check report a false merge commit, so the
+      # head SHA is checked out explicitly instead.
+      - name: Checkout the pull-request head
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
 
       - name: Fetch the base branch
         env:
@@ -215,6 +240,7 @@ jobs:
           PR_ADDITIONS: ${{ github.event.pull_request.additions }}
           PR_DELETIONS: ${{ github.event.pull_request.deletions }}
           PR_CHANGED_FILES: ${{ github.event.pull_request.changed_files }}
+          PR_LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
         run: bash scripts/checks/check-pr-meta.sh
 
       - name: Semantic pull-request title (advisory annotations)

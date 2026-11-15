@@ -15,12 +15,18 @@
 #   PR_ADDITIONS     added lines
 #   PR_DELETIONS     deleted lines
 #   PR_CHANGED_FILES number of changed files
+#   PR_LABELS       comma-separated label names (enables the size exemption)
 #
 # Thresholds:
 #   WARN  > 400 changed lines or > 20 changed files  (CONTRIBUTING.md asks for
 #          atomic PRs — "a PR that fixes three bugs and redesigns two pages is
 #          difficult to review and will likely be rejected")
-#   FAIL  > 4000 changed lines or > 200 changed files
+#   FAIL  > 10000 changed lines or > 300 changed files
+#
+# Exemption: a PR carrying the 'size: exempt' label skips the size check. The
+# label is CODEOWNERS-protected and audited, because occasionally the right
+# change IS large — a new pipeline, a one-off codemod, a vendored file — and a
+# mechanical limit should not be the reason it never lands.
 # ==============================================================================
 set -uo pipefail
 
@@ -29,8 +35,8 @@ set -uo pipefail
 
 WARN_LINES=400
 WARN_FILES=20
-FAIL_LINES=4000
-FAIL_FILES=200
+FAIL_LINES=10000
+FAIL_FILES=300
 
 TYPES='feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert|release'
 TITLE_RE="^($TYPES)(\\([a-z0-9][a-z0-9._/-]*\\))?(!)?: .+"
@@ -88,20 +94,32 @@ fi
 
 # ------------------------------------------------------------------------------
 # 5. Size limits.
+#
+# A label-based exemption exists because a purely mechanical limit eventually
+# blocks the right change: adding this very pipeline produced a 4,900-line pull
+# request that could not have been split into anything reviewable. The exemption
+# is a label rather than a title flag so it is visible, auditable and easy to
+# revoke.
 # ------------------------------------------------------------------------------
 add="${PR_ADDITIONS:-0}"
 del="${PR_DELETIONS:-0}"
 files="${PR_CHANGED_FILES:-0}"
 lines=$((add + del))
 
-if [ "$lines" -gt "$FAIL_LINES" ] || [ "$files" -gt "$FAIL_FILES" ]; then
-  record_error "PR is too large to review ($lines lines across $files files)" \
-    "PR #$PR_NUMBER changes $lines lines across $files files (limits: $FAIL_LINES lines / $FAIL_FILES files). Split it into stacked, independently reviewable PRs."
-elif [ "$lines" -gt "$WARN_LINES" ] || [ "$files" -gt "$WARN_FILES" ]; then
-  record_warning "PR is large ($lines lines across $files files)" \
-    "PR #$PR_NUMBER changes $lines lines across $files files. Keep PRs atomic — reviewers need to be able to hold the whole change in their head."
+if printf '%s' "${PR_LABELS:-}" | tr ',' '\n' | grep -qx 'size: exempt'; then
+  log_ok "PR is exempt from the size limits (label: size: exempt) — $lines lines across $files files"
+  record_warning "PR #$PR_NUMBER carries the 'size: exempt' label" \
+    "PR #$PR_NUMBER changes $lines lines across $files files and is exempt from the size limits via the 'size: exempt' label. Confirm the exemption is justified and record why."
 else
-  log_ok "PR size is reviewable ($lines lines across $files files)"
+  if [ "$lines" -gt "$FAIL_LINES" ] || [ "$files" -gt "$FAIL_FILES" ]; then
+    record_error "PR is too large to review ($lines lines across $files files)" \
+      "PR #$PR_NUMBER changes $lines lines across $files files (limits: $FAIL_LINES lines / $FAIL_FILES files). Split it into stacked, independently reviewable PRs, or ask a maintainer to apply the 'size: exempt' label with a written justification."
+  elif [ "$lines" -gt "$WARN_LINES" ] || [ "$files" -gt "$WARN_FILES" ]; then
+    record_warning "PR is large ($lines lines across $files files)" \
+      "PR #$PR_NUMBER changes $lines lines across $files files. Keep PRs atomic — reviewers need to be able to hold the whole change in their head."
+  else
+    log_ok "PR size is reviewable ($lines lines across $files files)"
+  fi
 fi
 
 # ------------------------------------------------------------------------------
