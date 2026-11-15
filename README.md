@@ -1,6 +1,6 @@
 <p align="center">
   <a href="https://github.com/Open-Source-Software-Club/OSS_website">
-    <img src="public/assets/brand/logo.png" alt="Open Source Software Club Logo" width="140" height="140" />
+    <img src="https://raw.githubusercontent.com/Open-Source-Software-Club/OSS_website/main/public/assets/brand/logo.png" alt="Open Source Software Club Logo" width="140" height="140" />
   </a>
 </p>
 
