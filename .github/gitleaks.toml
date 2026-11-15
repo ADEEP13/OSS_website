@@ -1,0 +1,69 @@
+# ==============================================================================
+# .github/gitleaks.toml
+#
+# Configuration for the optional full-history Gitleaks sweep in
+# .github/workflows/security.yml.
+#
+# The bash scanner in scripts/checks/check-secrets.sh is the gate that always
+# runs; Gitleaks is the second opinion that also looks at git history, where a
+# secret can survive deletion and still be recoverable.
+#
+# `useDefault = true` keeps every built-in rule. Everything below only removes
+# known false positives — never a detection.
+# ==============================================================================
+
+title = "OSS Club gitleaks configuration"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Global allowlist for files that legitimately contain high-entropy strings"
+
+# ------------------------------------------------------------------------------
+# Paths that are expected to trip generic detectors
+# ------------------------------------------------------------------------------
+paths = [
+  # pnpm integrity hashes are base64 and look like credentials to every scanner.
+  '''pnpm-lock\.yaml''',
+  '''yarn\.lock''',
+  '''package-lock\.json''',
+
+  # The label taxonomy contains colour codes and long descriptive strings.
+  '''\.github/labels\.yml''',
+
+  # These files exist to document forbidden patterns; they necessarily contain
+  # examples of them.
+  '''\.github/allowed-files\.txt''',
+  '''\.github/large-files\.allowlist''',
+
+  # Lighthouse budgets are numbers, not secrets.
+  '''\.github/lighthouse/config\.json''',
+
+  # This file describes the exclusions themselves.
+  '''\.github/gitleaks\.toml''',
+]
+
+# ------------------------------------------------------------------------------
+# Values that are obviously not real credentials
+# ------------------------------------------------------------------------------
+regexes = [
+  '''PLACEHOLDER''',
+  '''CHANGEME''',
+  '''CHANGE_ME''',
+  '''REDACTED''',
+  '''YOUR[-_]''',
+  '''your[-_]''',
+  '''example\.(com|org|net)''',
+  '''ci-placeholder''',
+  '''xxxxxxxx''',
+]
+
+# A stop-words list, so a commit that merely mentions "token" in prose does not
+# produce a finding on its own.
+stopwords = [
+  'placeholder',
+  'changeme',
+  'redacted',
+  'example',
+]

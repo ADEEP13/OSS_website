@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# .githooks/commit-msg
+#
+# Enforces Conventional Commits locally, at the moment the message is written.
+# Because the project squash-merges pull requests, the *PR title* is the commit
+# that lands on main — this hook is what keeps every commit in the branch
+# history consistent with that rule.
+#
+# Install once per clone:
+#   git config core.hooksPath .githooks      (or: ./scripts/install-hooks.sh)
+# ==============================================================================
+set -uo pipefail
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+
+MSG_FILE="$1"
+[ -f "$MSG_FILE" ] || exit 0
+
+# `git commit` reuses an existing message during rebase/amend; still validate.
+bash "$REPO_ROOT/scripts/checks/check-commit-msg.sh" "$MSG_FILE"
+rc=$?
+
+if [ "$rc" -ne 0 ]; then
+  cat >&2 <<'MSG'
+
+------------------------------------------------------------------------------
+Commit message rejected.
+
+This repository follows Conventional Commits:
+
+    <type>(<optional scope>): <subject>
+
+    feat(projects): add search filter by programming language
+    fix(auth): resolve redirect loop after login
+    docs(readme): document the CI pipeline
+
+Allowed types: feat fix docs style refactor perf test build ci chore revert
+
+Why it matters: the squash-merge commit on main is derived from the PR title,
+and CHANGELOG.md / release notes are generated from these headers.
+------------------------------------------------------------------------------
+MSG
+  exit 1
+fi
+
+exit 0

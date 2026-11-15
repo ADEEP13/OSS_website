@@ -1,0 +1,144 @@
+# ==============================================================================
+# Protect main — detective control for direct pushes
+#
+# Docs: docs/CI_CD.md
+#
+# Branch protection is the preventive control: it makes a direct push to main
+# impossible for everyone except administrators. This workflow is the detective
+# control for the residual risk — a push performed by an administrator, by a
+# token with elevated rights, or by an integration that bypasses the ruleset.
+#
+# It cannot block the push (nothing can, after the fact). What it can do is make
+# the bypass loud and permanent: it opens an incident issue tagged for the
+# maintainers, so the event is reviewed rather than forgotten.
+#
+# How it detects a bypass
+#   Squash merges produce a single commit whose subject ends in "(#123)".
+#   Anything else reaching main is either a direct push or a merge commit, both
+#   of which the repository rules forbid.
+# ==============================================================================
+
+name: Protect Main
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  audit:
+    name: Audit direct pushes to main
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Inspect what reached main
+        id: inspect
+        env:
+          SHA: ${{ github.sha }}
+        run: |
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+
+          # The parent of the new HEAD is the previous tip of main.
+          parent="$(git rev-parse "$SHA^" 2>/dev/null || true)"
+          echo "parent=$parent" >> "$GITHUB_OUTPUT"
+
+          # A merge commit has two or more parents. Linear history forbids it.
+          parents="$(git rev-list --parents -n 1 "$SHA" 2>/dev/null | wc -w || echo 0)"
+          echo "parents=$((parents - 1))" >> "$GITHUB_OUTPUT"
+
+          subject="$(git log -1 --format='%s' "$SHA" 2>/dev/null || true)"
+          echo "subject=$subject" >> "$GITHUB_OUTPUT"
+
+          if printf '%s' "$subject" | grep -Eq '\(#[0-9]+\)$'; then
+            echo "squashed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "squashed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Verify the push came from a pull request
+        id: pr
+        env:
+          SHA: ${{ github.sha }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # A squash-merged PR commit is reachable from a closed, merged PR.
+          count="$(gh api "repos/${{ github.repository }}/commits/$SHA/pulls" \
+                     --jq '[.[] | select(.merged_at != null)] | length' 2>/dev/null || echo 0)"
+          echo "count=$count" >> "$GITHUB_OUTPUT"
+
+      - name: Report a clean merge
+        if: steps.inspect.outputs.squashed == 'true' && steps.pr.outputs.count != '0'
+        run: |
+          echo "Push to main came from a merged pull request. No action needed."
+
+      - name: Raise an incident for an unverified push
+        if: steps.inspect.outputs.squashed != 'true' || steps.pr.outputs.count == '0'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const sha = context.sha;
+            const subject = `${{ steps.inspect.outputs.subject }}`;
+            const parents = ${{ steps.inspect.outputs.parents }};
+            const actor = context.actor;
+
+            const body = [
+              '## A push reached `main` without a verified pull request',
+              '',
+              'Branch protection is the preventive control and this workflow is the',
+              'detective control. This alert means the preventive control was bypassed,',
+              'most likely by an administrator or an integration token.',
+              '',
+              '| Detail | Value |',
+              '|---|---|',
+              `| Commit | \`${sha}\` |`,
+              `| Subject | ${subject} |`,
+              `| Parents | ${parents} |`,
+              `| Actor | @${actor} |`,
+              `| Workflow run | [${context.runId}](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}) |`,
+              '',
+              '### What to do',
+              '',
+              '1. Open the commit and confirm the change was intended and reviewed.',
+              '2. If it was intentional, no further action is required.',
+              '3. If it was not, revert it immediately and review who has',
+              '   administrator access and which tokens can bypass the ruleset.',
+              '4. Check whether any secret was exposed; if so, rotate it.',
+              '',
+              '### If this alert is wrong',
+              '',
+              'A merge performed from the command line (`git push origin main` after a',
+              'local merge) also triggers it. Use the GitHub UI or `gh pr merge` so the',
+              'commit is attributed to a pull request.',
+            ].join('\n');
+
+            // Reuse a single incident issue so repeated bypasses accumulate in
+            // one thread instead of spamming the tracker.
+            const existing = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              labels: 'incident',
+              state: 'open',
+              per_page: 1,
+            });
+
+            if (existing.data.length > 0) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: existing.data[0].number,
+                body: `Another unverified push to \`main\`:\n\n${body}`,
+              });
+              core.warning(`Unverified push to main: ${sha}. Commented on issue #${existing.data[0].number}.`);
+            } else {
+              const issue = await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: `Unverified push to main: ${subject}`,
+                body,
+                labels: ['incident', 'security'],
+              });
+              core.warning(`Unverified push to main: ${sha}. Opened issue #${issue.data.number}.`);
+            }

@@ -1,0 +1,98 @@
+# ==============================================================================
+# End-to-end tests — Playwright
+#
+# Docs: docs/CI_CD.md
+#
+# Unit tests prove the units work. E2E proves the product works: that a visitor
+# can reach the homepage, that a beginner can filter issues, that a form
+# submits. These are the tests that catch the regressions a reviewer cannot see
+# by reading a diff.
+#
+# Roadmap MVP acceptance criterion: "All P0 stories pass E2E".
+# ==============================================================================
+
+name: E2E
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'tests/e2e/**'
+      - 'playwright.config.ts'
+      - 'playwright.config.js'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - '.github/workflows/e2e.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'tests/e2e/**'
+      - 'playwright.config.ts'
+  workflow_dispatch:
+
+concurrency:
+  group: e2e-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+permissions:
+  contents: read
+
+jobs:
+  playwright:
+    name: End-to-End Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Detect the Playwright suite
+        id: detect
+        run: |
+          if [ -f playwright.config.ts ] || [ -f playwright.config.js ]; then
+            echo "e2e=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "e2e=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::No Playwright configuration yet. E2E checks will activate when tests/e2e lands (Phase 7)."
+          fi
+
+      - name: Setup Node.js
+        if: steps.detect.outputs.e2e == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install pnpm and dependencies
+        if: steps.detect.outputs.e2e == 'true'
+        run: |
+          npm install --global "pnpm@9.15.9"
+          pnpm install --frozen-lockfile
+
+      - name: Install Playwright browsers
+        if: steps.detect.outputs.e2e == 'true'
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Build the application
+        if: steps.detect.outputs.e2e == 'true'
+        env:
+          NEXT_PUBLIC_SITE_URL: http://localhost:3000
+          NEXT_PUBLIC_SUPABASE_URL: https://ci-placeholder.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ci-placeholder-anon-key
+          SKIP_ENV_VALIDATION: '1'
+          NEXT_TELEMETRY_DISABLED: '1'
+        run: pnpm build
+
+      - name: Run the Playwright suite
+        if: steps.detect.outputs.e2e == 'true'
+        run: pnpm e2e
+
+      - name: Upload the Playwright report
+        if: always() && steps.detect.outputs.e2e == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 14
+          if-no-files-found: ignore

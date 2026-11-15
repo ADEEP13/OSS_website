@@ -1,0 +1,105 @@
+# ==============================================================================
+# Dependabot — automated dependency and action updates
+#
+# Docs: docs/CI_CD.md · docs/PRD.md §8 ("Dependabot + pnpm audit in CI")
+#
+# Security patches must arrive without waiting for a volunteer to notice them.
+# Dependabot opens the pull request; CI is what decides whether it is safe.
+#
+# Grouping: every update lands in its own PR so a single bad transitive
+# dependency never blocks a security fix.
+# ==============================================================================
+
+version: 2
+
+updates:
+  # ----------------------------------------------------------------------------
+  # npm dependencies
+  # ----------------------------------------------------------------------------
+  - package-ecosystem: npm
+    directory: '/'
+    schedule:
+      interval: weekly
+      day: monday
+      time: '05:00'
+      timezone: 'Asia/Kolkata'
+    open-pull-requests-limit: 5
+    target-branch: main
+    labels:
+      - dependencies
+      - maintenance
+    commit-message:
+      prefix: chore
+      prefix-separator: ':'
+      include: scope
+    versioning-strategy: increase
+    groups:
+      # A coordinated Next.js + React + TypeScript bump is one upgrade, not
+      # three. Everything else stays individual so a regression is easy to
+      # attribute.
+      next-ecosystem:
+        patterns:
+          - 'next'
+          - 'next-*'
+          - 'react'
+          - 'react-*'
+          - 'react-dom'
+          - '@types/react'
+          - '@types/react-dom'
+          - 'typescript'
+      tailwind-ecosystem:
+        patterns:
+          - 'tailwindcss'
+          - 'tailwindcss-*'
+          - 'postcss'
+          - 'autoprefixer'
+          - 'prettier-plugin-tailwindcss'
+      testing:
+        patterns:
+          - 'vitest'
+          - '@vitest/*'
+          - '@playwright/*'
+          - 'playwright'
+          - '@testing-library/*'
+
+  # ----------------------------------------------------------------------------
+  # GitHub Actions
+  # ----------------------------------------------------------------------------
+  - package-ecosystem: github-actions
+    directory: '/'
+    schedule:
+      interval: weekly
+      day: monday
+      time: '05:30'
+      timezone: 'Asia/Kolkata'
+    open-pull-requests-limit: 5
+    target-branch: main
+    labels:
+      - github_actions
+      - maintenance
+    commit-message:
+      prefix: ci
+      prefix-separator: ':'
+      include: scope
+    groups:
+      actions:
+        patterns:
+          - '*'
+
+  # ----------------------------------------------------------------------------
+  # Docker (Supabase local development images, if/when used)
+  # ----------------------------------------------------------------------------
+  - package-ecosystem: docker
+    directory: '/supabase'
+    schedule:
+      interval: monthly
+      day: monday
+      time: '05:00'
+      timezone: 'Asia/Kolkata'
+    labels:
+      - dependencies
+      - maintenance
+    commit-message:
+      prefix: chore
+      prefix-separator: ':'
+      include: scope

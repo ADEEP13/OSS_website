@@ -144,3 +144,113 @@ Session.vim
 *.temp
 *.patch
 *.diff
+
+# ==============================================================================
+# Additions — package-manager and tooling conflicts
+#
+# CONTRIBUTING.md is explicit: "Do NOT run npm install or yarn install. Doing so
+# generates conflicting lockfiles (package-lock.json or yarn.lock) and will
+# cause automated CI workflows to fail."
+#
+# .gitignore cannot untrack a file that is already tracked, so these entries are
+# a convenience, not the control. scripts/checks/check-forbidden-files.sh and
+# scripts/checks/check-lockfiles.sh are what actually block them, because they
+# look at what git has *tracked* rather than at what git is ignoring.
+# ==============================================================================
+package-lock.json
+npm-shrinkwrap.json
+.package-lock.json
+yarn.lock
+.yarn-integrity
+bun.lockb
+bun.lock
+.pnp.cjs
+.pnp.loader.mjs
+.pnp.data.json
+.npmrc
+.yarnrc
+.yarnrc.yml
+.pnpmfile.cjs
+
+# ==============================================================================
+# Additions — secrets, one level deeper
+#
+# The original list covers .env* and PEM files. These cover the shapes a real
+# leak actually takes.
+# ==============================================================================
+*.p12
+*.pfx
+*.jks
+*.keystore
+*.ppk
+*.asc
+id_rsa
+id_rsa.pub
+id_dsa
+id_ecdsa
+id_ed25519
+id_ed25519.pub
+secrets.json
+secrets.yaml
+secrets.yml
+secrets.*.json
+credentials.json
+*.credentials
+.serviceaccount
+service-account*.json
+gcp-*.json
+.netrc
+
+# ==============================================================================
+# Additions — tooling caches the original list did not know about
+# ==============================================================================
+.lighthouseci/
+.playwright/
+.auth/
+.stfolder/
+.history/
+.claude/settings.local.json
+.cursorrules.local
+.aider*
+.env*.local
+*.local
+.tool-versions
+.python-version
+.node_repl_history
+.eslintcache
+.prettiercache
+.node-version
+.nvmrc
+
+# ==============================================================================
+# Additions — framework build output added since the original file
+# ==============================================================================
+.astro/
+.docusaurus/
+.solid-start/
+.vinxi/
+.wrangler/
+.serverless/
+.firebase/
+.terraform/
+*.tsbuildinfo
+*.js.map
+*.css.map
+
+# ==============================================================================
+# Additions — coverage and report formats
+# ==============================================================================
+.nyc_output/
+lcov-report/
+htmlcov/
+.coverage
+.coverage.*
+junit.xml
+test-report.xml
+
+# ==============================================================================
+# The ONLY environment file that may be committed. Everything else above it is
+# ignored, and CI fails if a real one is tracked.
+# ==============================================================================
+!.env.example
+!.env.template

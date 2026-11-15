@@ -26,6 +26,7 @@ This repository powers the official website for the **Open Source Software Club 
   - [File and Directory Naming](#file-and-directory-naming)
 - [Commit Conventions](#-commit-conventions)
 - [Testing & Quality Verification](#-testing--quality-verification)
+- [The Automated Gate](#-the-automated-gate)
 - [Submitting a Pull Request](#-submitting-a-pull-request)
 - [Review & Merge Process](#-review--merge-process)
 - [First Contribution Walkthrough](#-first-contribution-walkthrough)
@@ -266,6 +267,69 @@ pnpm build
 
 ---
 
+## 🚦 The Automated Gate
+
+Everything above is re-checked by CI, and CI adds checks that cannot run on your
+machine alone. The full design lives in **[docs/CI_CD.md](docs/CI_CD.md)**.
+
+### Install the hooks first
+
+```bash
+./scripts/install-hooks.sh
+```
+
+This points git at `.githooks/`, so the same checks that gate CI run before your
+code ever leaves your machine:
+
+| Hook | Blocks |
+|:---|:---|
+| `pre-commit` | secrets, `.env` files, foreign lockfiles, build output, oversized files, trailing whitespace, tabs, CRLF |
+| `commit-msg` | commit messages that are not Conventional Commits |
+| `pre-push` | direct pushes to `main`, plus a re-run of the whole gate on your branch |
+
+Run the whole gate on demand at any time:
+
+```bash
+./scripts/checks/run-all.sh            # everything, whole working tree
+./scripts/checks/run-all.sh --staged   # only what is staged
+```
+
+### What CI will reject
+
+Your pull request cannot be merged unless all of these are true:
+
+- the PR **title** is a Conventional Commit (it becomes the squash-merge commit
+  on `main`)
+- every commit message in the branch is a Conventional Commit
+- the **branch name** follows `<type>/<short-description>`
+- no secret, private key, `.env` file, `package-lock.json` or `yarn.lock` is
+  present anywhere in the branch
+- no file larger than 1 MiB is committed
+- `pnpm lint`, `pnpm type-check`, `pnpm format:check`, `pnpm test` and
+  `pnpm build` all pass
+- the branch contains **no merge commits** (we require a linear history)
+- at least one approving review, from a code owner for protected paths
+- all review conversations are resolved
+- the branch is up to date with `main`
+
+### If a check blocks you and you think it is wrong
+
+Do not bypass it. Fix it, or add a reviewed exception:
+
+| Situation | Fix |
+|:---|:---|
+| A legitimate file is blocked | add it to `.github/allowed-files.txt` with a comment |
+| A legitimate large file is blocked | add it to `.github/large-files.allowlist` with a justification |
+| A secret pattern is a false positive | add the marker to `PLACEHOLDER_RE` in `scripts/checks/check-secrets.sh` and explain why |
+| The PR is too large to review | split it into stacked PRs |
+
+Exceptions in those two files show up in the pull request diff and are covered by
+CODEOWNERS, so they are reviewed like any other change. Bypassing with
+`--no-verify` only moves the failure into a review queue where somebody else has
+to deal with it.
+
+---
+
 ## 🚀 Submitting a Pull Request
 
 Once you have verified your changes locally:
@@ -332,10 +396,10 @@ If this is your first time contributing to an open-source project on GitHub, fol
 
 ## ⚠️ Common Pitfalls to Avoid
 
-- **Submitting PRs directly to `main` branch:** Always branch out from an updated `main`.
+- **Submitting PRs directly to `main` branch:** Always branch out from an updated `main`. The `pre-push` hook refuses it, and branch protection refuses it.
 - **Committing lockfiles from other tools:** Never commit `package-lock.json` or `yarn.lock`. Only `pnpm-lock.yaml` should exist.
-- **Pushing `.env.local` or sensitive secrets:** Never commit API keys or private tokens.
-- **Creating giant monolithic PRs:** Keep PRs atomic and focused on a single issue. A PR that fixes three different bugs and redesigns two pages is difficult to review and will likely be rejected.
+- **Pushing `.env.local` or sensitive secrets:** Never commit API keys or private tokens. The pre-commit hook and the `Secret Scan` CI check both block this, and GitHub push protection blocks it before it even reaches the repository.
+- **Creating giant monolithic PRs:** Keep PRs atomic and focused on a single issue. A PR that fixes three different bugs and redesigns two pages is difficult to review and will likely be rejected — and above 4000 changed lines it is rejected automatically by the PR Conventions check.
 - **Ignoring mobile responsiveness:** Always check your UI on mobile viewports (320px - 768px) and in both light and dark modes.
 
 ---

