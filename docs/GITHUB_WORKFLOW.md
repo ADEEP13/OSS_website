@@ -28,12 +28,16 @@ Examples:
 
 ## Pull request rules
 
-- **1 approval** required (2 for `lib/github`, `supabase/migrations`, `lib/rbac` via CODEOWNERS)
-- All CI checks green
+- **1 approval** required, from a **code owner** for `lib/github`, `supabase/migrations`, `lib/rbac` and every other path in `.github/CODEOWNERS`
+- All required CI checks green: `Repository Hygiene`, `PR Conventions`, `Verify`, `Secret Scan`, `Dependency Review`
 - Up-to-date with `main`
-- Linear history (squash merge)
+- Linear history (squash merge only; merge commits are rejected)
 - All conversations resolved
-- No force-push to `main`
+- No force-push to `main`, no branch deletion
+- PR title is a Conventional Commit, because squash-merge uses it as the commit on `main`
+
+Applied by `.github/branch-protection/apply.sh` from
+`.github/branch-protection/ruleset.json`.
 
 ### PR template checklist
 
@@ -105,42 +109,66 @@ Every dev issue includes:
 
 ---
 
-## CI pipeline (`.github/workflows/ci.yml`)
+## CI pipeline
+
+Implemented, not sketched. The authoritative description — including why each
+rule exists and how to extend it — is **[CI_CD.md](./CI_CD.md)**.
 
 ```yaml
-name: ci
-on: { pull_request: {}, push: { branches: [main] } }
-concurrency: { group: ci-${{ github.ref }}, cancel-in-progress: true }
+# .github/workflows/ci.yml  (abridged)
+name: CI
+on:
+  pull_request: { branches: [main] }
+  push:         { branches: [main] }
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+permissions: { contents: read }
+
 jobs:
-  verify:
-    runs-on: ubuntu-latest
+  hygiene:                       # required check — always runs
+    name: Repository Hygiene
     steps:
       - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
-        with: { node-version: 22, cache: pnpm }
+      - run: bash scripts/checks/check-forbidden-files.sh
+      - run: bash scripts/checks/check-large-files.sh
+      - run: bash scripts/checks/check-lockfiles.sh
+      - run: bash scripts/checks/check-text-hygiene.sh
+      # + YAML syntax, actionlint, CODEOWNERS validation
+
+  pr-conventions:                # required check — PRs only
+    name: PR Conventions
+    needs: hygiene
+    steps:
+      - run: bash scripts/checks/check-branch-name.sh "$HEAD_REF"
+      - run: bash scripts/checks/check-commit-msg.sh --range "origin/$BASE_REF...HEAD"
+      - run: bash scripts/checks/check-pr-meta.sh
+
+  verify:                        # required check — activates with package.json
+    name: Verify (Lint · Types · Tests · Build)
+    needs: hygiene
+    steps:
       - run: pnpm install --frozen-lockfile
-      - run: pnpm lint && pnpm typecheck
-      - run: pnpm test --run
-      - run: pnpm build
-        env: { NEXT_PUBLIC_SITE_URL: http://localhost:3000, SKIP_ENV_VALIDATION: "1" }
-  db:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: supabase/setup-cli@v1
-      - run: supabase db start && supabase db reset && supabase test db
-  e2e:
+      - run: bash scripts/ci/run-script.sh lint
+      - run: bash scripts/ci/run-script.sh type-check
+      - run: bash scripts/ci/run-script.sh format:check
+      - run: bash scripts/ci/run-script.sh test -- --coverage
+      - run: bash scripts/ci/run-script.sh build
+      # + client-bundle secret scan
+
+  accessibility:                 # advisory until the app exists
+    name: Accessibility (Lighthouse)
     needs: verify
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
-        with: { node-version: 22, cache: pnpm }
-      - run: pnpm install --frozen-lockfile && pnpm exec playwright install --with-deps chromium
-      - run: pnpm e2e
 ```
+
+Sibling workflows: `security.yml` (Secret Scan · Dependency Review),
+`codeql.yml`, `db-check.yml` (migrations + pgTAP on a fresh local Postgres),
+`e2e.yml` (Playwright), `labels-sync.yml`, `reconcile.yml`, `db-migrate.yml`
+(manual approval), `stale.yml`, `protect-main.yml`, `pr-automation.yml`.
+
+**Design rule:** every required check runs unconditionally and always reports a
+conclusion. A skipped job cannot be a required status check without deadlocking
+merges, so jobs with nothing to do yet succeed with a `::notice::` instead.
 
 ### Deployment integration
 

@@ -1,0 +1,123 @@
+# ==============================================================================
+# Label synchronisation
+#
+# Docs: docs/CI_CD.md · docs/GITHUB_INTEGRATION.md §6.2
+#
+# "Labels live in GitHub (single source). labels-sync.yml ensures them across
+#  all repos (one-way, idempotent)."
+#
+# The label taxonomy is not decoration: difficulty, area and type labels are
+# parsed at sync time to populate `difficulty`, `areas[]` and `issue_type` on
+# the website. A missing or misspelled label silently removes an issue from the
+# beginner filter, so the taxonomy is enforced from .github/labels.yml rather
+# than trusted to memory.
+#
+# Runs weekly, and can be triggered manually by a maintainer.
+# ==============================================================================
+
+name: Labels Sync
+
+on:
+  schedule:
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+    inputs:
+      all_org_repos:
+        description: 'Sync to every repository in the organisation, not just this one'
+        type: boolean
+        default: false
+  push:
+    paths:
+      - '.github/labels.yml'
+      - '.github/workflows/labels-sync.yml'
+
+concurrency:
+  group: labels-sync
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  sync-this-repository:
+    name: Sync labels (this repository)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Validate the label taxonomy
+        run: |
+          # Catch taxonomy mistakes before they are pushed to GitHub.
+          if [ ! -f .github/labels.yml ]; then
+            echo "::error::.github/labels.yml is missing."
+            exit 1
+          fi
+          python3 - <<'PY'
+          import sys, yaml
+          labels = yaml.safe_load(open('.github/labels.yml', encoding='utf-8'))
+          seen, problems = set(), []
+          for entry in labels:
+              name = entry.get('name', '')
+              if not name:
+                  problems.append('an entry has no name')
+                  continue
+              if name in seen:
+                  problems.append(f'duplicate label: {name}')
+              seen.add(name)
+              colour = str(entry.get('color', ''))
+              if not (len(colour) in (3, 6) and all(c in '0123456789abcdefABCDEF' for c in colour)):
+                  problems.append(f'{name}: invalid colour "{colour}"')
+              if not entry.get('description'):
+                  problems.append(f'{name}: missing description')
+          if problems:
+              for p in problems:
+                  print(f'::error::{p}')
+              sys.exit(1)
+          print(f'Label taxonomy is valid ({len(seen)} labels).')
+          PY
+
+      - name: Apply labels to this repository
+        uses: EndBug/label-sync@v2
+        with:
+          config-file: .github/labels.yml
+          token: ${{ secrets.GITHUB_TOKEN }}
+          # 'delete-other-labels' stays false on purpose: the club's existing
+          # labels are not all in the taxonomy yet, and silently deleting a
+          # label somebody is filtering by is a nasty surprise.
+          delete-other-labels: false
+          dry-run: false
+
+  sync-organisation:
+    name: Sync labels (all organisation repositories)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' && inputs.all_org_repos
+    timeout-minutes: 20
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Apply labels across the organisation
+        env:
+          # A fine-grained PAT with repository "Administration: write" on every
+          # repository in the organisation. Optional — when unset, this job is
+          # skipped rather than failing.
+          SYNC_TOKEN: ${{ secrets.ORG_LABELS_SYNC_TOKEN }}
+          ORG: ${{ github.repository_owner }}
+        run: |
+          if [ -z "$SYNC_TOKEN" ]; then
+            echo "::warning::ORG_LABELS_SYNC_TOKEN is not configured — skipping the organisation-wide sync."
+            exit 0
+          fi
+          repos="$(gh repo list "$ORG" --limit 200 --json nameWithOwner --jq '.[].nameWithOwner')"
+          failed=0
+          for repo in $repos; do
+            echo "Syncing labels to $repo"
+            if ! npx --yes label-sync --config-file .github/labels.yml --repo "$repo" --token "$SYNC_TOKEN"; then
+              echo "::warning::Failed to sync labels to $repo"
+              failed=1
+            fi
+          done
+          exit "$failed"

@@ -1,0 +1,101 @@
+# ==============================================================================
+# Housekeeping — stale pull requests and branches
+#
+# Docs: docs/CI_CD.md
+#
+# A club repository accumulates abandoned forks' branches and half-finished
+# pull requests faster than any other kind of clutter. Both cost real attention:
+# every open PR is something a maintainer must evaluate before merging anything
+# else, and Vercel builds a preview deployment for each one.
+#
+# CONTRIBUTING.md already sets the expectation for issues ("Inactivity Policy:
+# 7 days"). This workflow applies the same courtesy to pull requests and
+# branches, with a longer grace period because a student's semester is not a
+# sprint.
+# ==============================================================================
+
+name: Housekeeping
+
+on:
+  schedule:
+    - cron: '0 7 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  stale-pull-requests:
+    name: Stale pull requests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Mark and close inactive pull requests
+        uses: actions/stale@v9
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          # Only pull requests: issues are triaged by humans and a bot closing
+          # a newcomer's question is a terrible first experience.
+          days-before-pr-stale: 30
+          days-before-pr-close: 14
+          stale-pr-message: >
+            This pull request has had no activity for 30 days. It will be
+            closed in 14 days unless it is updated. If you are still working on
+            it, push a commit or comment here — that is all it takes to keep it
+            open. If someone else has picked up the issue, that is fine too;
+            just let us know so we can close this one.
+          close-pr-message: >
+            Closed after 44 days of inactivity. Nothing was wrong with this
+            work — we simply cannot review a change we cannot see the current
+            state of. Please open a fresh pull request whenever you pick this
+            up again; it will get a full review.
+          stale-pr-label: 'stale'
+          # Never touch anything a maintainer has already looked at.
+          exempt-pr-labels: 'priority: critical,priority: high,blocked,security'
+
+  merged-branches:
+    name: Delete merged branches
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Delete branches whose pull request has been merged
+        uses: actions/github-script@v7
+        with:
+          script: |
+            // Belt and braces: repository settings already delete the head
+            // branch on merge, but branches orphaned by a squash performed
+            // from the command line survive that.
+            const branches = await github.paginate(github.rest.repos.listBranches, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              per_page: 100,
+            });
+
+            const merged = [];
+            for (const branch of branches) {
+              if (branch.name === context.payload.repository.default_branch) continue;
+              try {
+                const { data: prs } = await github.rest.pulls.list({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  head: `${context.repo.owner}:${branch.name}`,
+                  state: 'closed',
+                  per_page: 1,
+                });
+                if (prs.length > 0 && prs[0].merged_at) {
+                  merged.push(branch.name);
+                  await github.rest.git.deleteRef({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    ref: `heads/${branch.name}`,
+                  });
+                  core.info(`Deleted merged branch ${branch.name}`);
+                }
+              } catch (error) {
+                core.warning(`Could not process branch ${branch.name}: ${error.message}`);
+              }
+            }
+            core.summary.write(`## Merged branch cleanup\n\nDeleted ${merged.length} merged branch(es).\n`);
+            await core.summary.write();

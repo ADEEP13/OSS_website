@@ -1,0 +1,88 @@
+# ==============================================================================
+# GitHub data reconcile — the scheduled fallback sync
+#
+# Docs: docs/CI_CD.md · docs/GITHUB_INTEGRATION.md §6.3
+#
+# Webhooks are the fast path (≤ 1 minute). They are not the reliable path:
+# GitHub redelivers, but a deployment can miss a window, an event can be
+# dropped, or a repository can be created while the app is down. Reconcile is
+# the safety net that makes the cache correct within 15 minutes no matter what.
+#
+# "Reconcile endpoint + scheduler + sync_state — Idempotent; handles rate
+#  limits; updates sync_state."
+#
+# GitHub Actions is the scheduler because Vercel Cron frequency depends on the
+# plan. Actions is free and its minimum interval is 5 minutes.
+# ==============================================================================
+
+name: Reconcile
+
+on:
+  schedule:
+    # Every 15 minutes, matching the documented freshness target for issues
+    # and pull requests.
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: reconcile
+  # Never cancel a running reconcile: a partial sync leaves the cache
+  # half-updated, which is worse than a late one.
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  reconcile:
+    name: Reconcile GitHub cache
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # Resolved once here rather than repeated in every step. `vars` and
+    # `secrets` are not available in every context an `if:` can appear in, so
+    # they are bound to the environment and read from there.
+    env:
+      SITE_URL: ${{ vars.SITE_URL || vars.NEXT_PUBLIC_SITE_URL }}
+      CRON_SECRET: ${{ secrets.CRON_SECRET }}
+    steps:
+      - name: Check the deployment is configured
+        id: config
+        run: |
+          if [ -z "$SITE_URL" ] || [ -z "$CRON_SECRET" ]; then
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::SITE_URL or CRON_SECRET is not configured — the reconcile scheduler is idle. Set them once the application is deployed."
+          else
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Trigger the reconcile endpoint
+        if: steps.config.outputs.enabled == 'true'
+        run: |
+          # --fail makes a non-2xx response fail the job so a broken sync is
+          # visible in the Actions history instead of silently going stale.
+          # --retry rides out a cold start or a transient 5xx.
+          code="$(curl --silent --show-error --fail-with-body \
+                      --retry 3 --retry-delay 5 --retry-all-errors \
+                      --max-time 120 \
+                      --header "Authorization: Bearer $CRON_SECRET" \
+                      --write-out '%{http_code}' \
+                      --output /tmp/reconcile.json \
+                      "$SITE_URL/api/cron/reconcile")" || {
+            echo "::error::Reconcile endpoint returned HTTP $code."
+            cat /tmp/reconcile.json 2>/dev/null || true
+            exit 1
+          }
+          echo "Reconcile completed with HTTP $code."
+          cat /tmp/reconcile.json 2>/dev/null || true
+
+      - name: Report the cache freshness
+        if: steps.config.outputs.enabled == 'true'
+        run: |
+          # A stale cache is the failure mode users actually notice: the site
+          # shows "Updated 3 h ago" and issues that were claimed days ago still
+          # look available. Surface it rather than waiting for a complaint.
+          status="$(curl --silent --max-time 30 "$SITE_URL/api/health/sync" || true)"
+          echo "Sync health: $status"
+          if printf '%s' "$status" | grep -Eq '"stale"[[:space:]]*:[[:space:]]*true'; then
+            echo "::warning::The GitHub cache is stale. Investigate sync_state.last_error and the webhook delivery log."
+          fi

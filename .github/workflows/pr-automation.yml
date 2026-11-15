@@ -1,0 +1,59 @@
+# ==============================================================================
+# Pull-request automation — labels from the diff
+#
+# Docs: docs/CI_CD.md · docs/GITHUB_INTEGRATION.md §6.2
+#
+# The label taxonomy is the input to the website's difficulty / area / type
+# filters. Keeping it accurate by hand does not survive a busy semester;
+# deriving it from the paths a pull request touches does.
+#
+# Scoped to `pull-requests: write` and nothing else.
+# ==============================================================================
+
+name: PR Automation
+
+on:
+  pull_request_target:
+    branches: [main]
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  label:
+    name: Apply labels from the diff
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout the pull-request head
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Validate the labeler configuration
+        run: |
+          python3 - <<'PY'
+          import sys, yaml
+          try:
+              cfg = yaml.safe_load(open('.github/labeler.yml', encoding='utf-8'))
+          except FileNotFoundError:
+              print('.github/labeler.yml is missing; skipping validation.')
+              sys.exit(0)
+          except yaml.YAMLError as exc:
+              print(f'::error::.github/labeler.yml is not valid YAML: {exc}')
+              sys.exit(1)
+          if not isinstance(cfg, dict) or not cfg:
+              print('::error::.github/labeler.yml is empty or malformed.')
+              sys.exit(1)
+          print(f'labeler.yml is valid ({len(cfg)} rule group(s)).')
+          PY
+
+      - name: Apply labels
+        uses: actions/labeler@v5
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          configuration-path: .github/labeler.yml
+          sync-labels: true

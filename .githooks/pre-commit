@@ -1,0 +1,60 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# .githooks/pre-commit
+#
+# Runs the fast, staged-only subset of the repository gate. Anything caught here
+# never becomes a commit, so it can never be pushed, reviewed or deployed.
+#
+# Install once per clone:
+#   git config core.hooksPath .githooks      (or: ./scripts/install-hooks.sh)
+#
+# Bypass (audited, and discouraged):
+#   git commit --no-verify
+# ==============================================================================
+set -uo pipefail
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+GATE="$REPO_ROOT/scripts/checks/run-all.sh"
+
+if [ ! -x "$GATE" ]; then
+  echo "pre-commit: repository gate not found at $GATE" >&2
+  exit 1
+fi
+
+# Only the checks that make sense against the index. Kept fast on purpose:
+# a hook that takes 30 seconds gets disabled by every contributor.
+bash "$REPO_ROOT/scripts/checks/check-forbidden-files.sh" --staged
+r1=$?
+
+bash "$REPO_ROOT/scripts/checks/check-secrets.sh" --staged
+r2=$?
+
+bash "$REPO_ROOT/scripts/checks/check-large-files.sh" --staged
+r3=$?
+
+bash "$REPO_ROOT/scripts/checks/check-text-hygiene.sh" --staged
+r4=$?
+
+bash "$REPO_ROOT/scripts/checks/check-lockfiles.sh"
+r5=$?
+
+if [ $((r1 + r2 + r3 + r4 + r5)) -ne 0 ]; then
+  cat >&2 <<'MSG'
+
+------------------------------------------------------------------------------
+Commit blocked by the OSS Club repository gate.
+
+The problems above are listed with the file and line that caused them. Fix
+them and re-run `git commit` — or run the full gate yourself:
+
+    ./scripts/checks/run-all.sh --staged
+
+If you believe a check is wrong, add a justified, reviewed exception to
+.github/allowed-files.txt (or .github/large-files.allowlist) rather than
+bypassing the hook.
+------------------------------------------------------------------------------
+MSG
+  exit 1
+fi
+
+exit 0

@@ -1,0 +1,85 @@
+{
+  "_comment": [
+    "Branch protection ruleset for the OSS Club Website repository.",
+    "",
+    "Apply with:  bash .github/branch-protection/apply.sh",
+    "Inspect with: gh api repos/OWNER/REPO/rulesets --jq '.[].name'",
+    "Remove with:  bash .github/branch-protection/apply.sh --remove",
+    "",
+    "This uses the Rulesets API rather than the legacy branch-protection API",
+    "because it is the only one that can express 'require an approval from a",
+    "code owner' and 'require branches to be up to date' together, and because",
+    "it is what GitHub is actively developing.",
+    "",
+    "The required status checks below are the exact job `name:` values emitted",
+    "by .github/workflows/ci.yml and .github/workflows/security.yml. Every one",
+    "of them runs unconditionally on every pull request and always reports a",
+    "conclusion, so none of them can deadlock a merge.",
+    "",
+    "See docs/CI_CD.md §5 for the reasoning behind each rule.",
+    "",
+    "--- OPTIONAL HARDENING ---------------------------------------------------",
+    "",
+    "'required_signatures' is deliberately NOT included. It is good practice,",
+    "but it requires every contributor to configure GPG or SSH commit signing,",
+    "which is a real barrier to a student's first contribution. Add it once the",
+    "core team is signing:",
+    "",
+    "    { \"type\": \"required_signatures\" }",
+    "",
+    "Note that .github/CODEOWNERS uses individual @usernames rather than",
+    "@Open-Source-Software-Club/* team names, because a CODEOWNERS entry that",
+    "references a team which does not exist matches nothing — and combined with",
+    "'require_code_owner_review' that makes merges permanently impossible.",
+    "See the header of .github/CODEOWNERS for how to switch to teams."
+  ],
+
+  "name": "Protect main",
+  "target": "branch",
+  "enforcement": "active",
+
+  "conditions": {
+    "ref_name": {
+      "include": ["~DEFAULT_BRANCH"],
+      "exclude": []
+    }
+  },
+
+  "rules": [
+    {
+      "type": "deletion"
+    },
+    {
+      "type": "non_fast_forward"
+    },
+    {
+      "type": "required_linear_history"
+    },
+    {
+      "type": "pull_request",
+      "parameters": {
+        "required_approving_review_count": 1,
+        "dismiss_stale_reviews_on_push": true,
+        "require_code_owner_review": true,
+        "require_last_push_approval": true,
+        "required_review_thread_resolution": true,
+        "allowed_merge_methods": ["squash"]
+      }
+    },
+    {
+      "type": "required_status_checks",
+      "parameters": {
+        "strict_required_status_checks_policy": true,
+        "required_status_checks": [
+          { "context": "Repository Hygiene" },
+          { "context": "PR Conventions" },
+          { "context": "Verify (Lint · Types · Tests · Build)" },
+          { "context": "Secret Scan" },
+          { "context": "Dependency Review" }
+        ]
+      }
+    }
+  ],
+
+  "bypass_actors": []
+}

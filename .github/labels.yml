@@ -1,0 +1,201 @@
+# ==============================================================================
+# .github/labels.yml
+#
+# The single source of truth for the OSS Club label taxonomy.
+#
+# docs/GITHUB_INTEGRATION.md §6.2 is explicit:
+#
+#   "Labels live in GitHub (single source). labels-sync.yml ensures them across
+#    all repos (one-way, idempotent)."
+#
+# Synced by .github/workflows/labels-sync.yml, weekly and on demand.
+# Never edit labels by hand in the GitHub UI — the change will be reverted.
+#
+# Colour scheme: greens = available work, ambers = blocked/needs attention,
+# reds = problems, blues = information, greys = housekeeping.
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# Difficulty — drives the "Beginner friendly" filter on /contribute
+# ------------------------------------------------------------------------------
+- name: 'good first issue'
+  color: '7CE3A6'
+  description: 'Welcoming entry-level task, ideal for a first open-source contribution'
+
+- name: 'difficulty: beginner'
+  color: '7CE3A6'
+  description: 'Static pages, content, copy, docs, seed data, small accessibility fixes'
+
+- name: 'difficulty: intermediate'
+  color: '43D17E'
+  description: 'Filters, forms, admin CRUD screens, tests'
+
+- name: 'difficulty: advanced'
+  color: '16A34A'
+  description: 'GitHub App, sync/webhooks, RLS, authorisation, CI/CD, performance'
+
+# ------------------------------------------------------------------------------
+# Area — which module of the codebase this touches
+# ------------------------------------------------------------------------------
+- name: 'area: frontend'
+  color: '6EA8FE'
+  description: 'React, Next.js App Router, components, styling'
+
+- name: 'area: backend'
+  color: '6EA8FE'
+  description: 'Route handlers, Server Actions, API clients'
+
+- name: 'area: fullstack'
+  color: '6EA8FE'
+  description: 'Spans both frontend and backend'
+
+- name: 'area: docs'
+  color: '6EA8FE'
+  description: 'README, guides, docstrings, runbooks'
+
+- name: 'area: devops'
+  color: '6EA8FE'
+  description: 'CI/CD, deployment, repository automation'
+
+- name: 'area: testing'
+  color: '6EA8FE'
+  description: 'Unit, integration, E2E and database tests'
+
+- name: 'area: design'
+  color: '6EA8FE'
+  description: 'Design tokens, UI/UX, accessibility, brand'
+
+- name: 'area: security'
+  color: 'F26B6B'
+  description: 'Authentication, authorisation, RLS, secrets, dependency risk'
+
+# ------------------------------------------------------------------------------
+# Type — what kind of change this is
+# ------------------------------------------------------------------------------
+- name: 'type: bug'
+  color: 'F26B6B'
+  description: 'Something is not working as intended'
+
+- name: 'type: enhancement'
+  color: '43D17E'
+  description: 'Improvement to existing functionality'
+
+- name: 'type: feature'
+  color: '22C55E'
+  description: 'New functionality'
+
+- name: 'type: docs'
+  color: '93A09A'
+  description: 'Documentation-only change'
+
+- name: 'type: refactor'
+  color: '93A09A'
+  description: 'Restructuring with no behaviour change'
+
+- name: 'type: maintenance'
+  color: '93A09A'
+  description: 'Tooling, dependencies, housekeeping'
+
+# ------------------------------------------------------------------------------
+# Workflow — derived from GitHub state, never set by hand
+# ------------------------------------------------------------------------------
+- name: 'needs triage'
+  color: 'F5B342'
+  description: 'Not yet reviewed by a maintainer'
+
+- name: 'blocked'
+  color: 'F5B342'
+  description: 'Cannot progress; see the linked dependency'
+
+- name: 'needs review'
+  color: 'F5B342'
+  description: 'A pull request is open and awaiting review'
+
+- name: 'in progress'
+  color: '6EA8FE'
+  description: 'Has an assignee or an open linked pull request'
+
+# ------------------------------------------------------------------------------
+# Priority
+# ------------------------------------------------------------------------------
+- name: 'priority: critical'
+  color: 'B3261E'
+  description: 'Blocks the launch gate; fix immediately'
+
+- name: 'priority: high'
+  color: 'F26B6B'
+  description: 'Required for the current milestone'
+
+- name: 'priority: medium'
+  color: 'F5B342'
+  description: 'Important but not on the critical path'
+
+- name: 'priority: low'
+  color: '93A09A'
+  description: 'Nice to have'
+
+# ------------------------------------------------------------------------------
+# Compatibility labels kept for the existing issue templates
+# ------------------------------------------------------------------------------
+- name: 'bug'
+  color: 'F26B6B'
+  description: 'Something is not working as intended'
+
+- name: 'enhancement'
+  color: '43D17E'
+  description: 'New feature or improvement'
+
+- name: 'documentation'
+  color: '93A09A'
+  description: 'Improvements or additions to documentation'
+
+# ------------------------------------------------------------------------------
+# Size exemption
+#
+# The only label that changes what CI enforces. Applying it exempts a pull
+# request from the PR Conventions size limits. It is CODEOWNERS-protected and
+# every use emits a warning in the Checks tab, so the exemption is always
+# visible and always audited.
+# ------------------------------------------------------------------------------
+- name: 'size: exempt'
+  color: 'F5B342'
+  description: 'Exempt from the PR size limits — apply only with a written justification in the PR description'
+
+# ------------------------------------------------------------------------------
+# Housekeeping
+# ------------------------------------------------------------------------------
+- name: 'duplicate'
+  color: '93A09A'
+  description: 'Already tracked elsewhere'
+
+- name: 'stale'
+  color: '93A09A'
+  description: 'No activity for 30 days; will be closed in 14 more unless updated'
+
+- name: 'wontfix'
+  color: '93A09A'
+  description: 'Deliberately not being worked on'
+
+- name: 'invalid'
+  color: '93A09A'
+  description: 'Not a valid issue for this repository'
+
+- name: 'help wanted'
+  color: '7CE3A6'
+  description: 'Maintainers need community help with this'
+
+- name: 'dependencies'
+  color: '6EA8FE'
+  description: 'Automated dependency update'
+
+- name: 'github_actions'
+  color: '6EA8FE'
+  description: 'Automated GitHub Actions update'
+
+- name: 'security'
+  color: 'F26B6B'
+  description: 'Security-relevant; see SECURITY.md for reporting'
+
+- name: 'incident'
+  color: 'B3261E'
+  description: 'A protection rule was bypassed; requires immediate review'

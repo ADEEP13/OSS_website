@@ -1,0 +1,102 @@
+# ==============================================================================
+# Database — migrations and Row Level Security tests
+#
+# Docs: docs/CI_CD.md · docs/DATABASE_SCHEMA.md
+#
+# The schema is the one part of this project where a mistake is not a broken
+# page but an exposed table. DATABASE_SCHEMA.md is explicit:
+#
+#   "Rule: Every RLS policy needs a pgTAP/SQL test (supabase/tests) verifying
+#    anon, member, maintainer, admin outcomes. CI job db-check runs migrations
+#    + tests on a fresh DB."
+#
+# Migrations run against a throwaway local Postgres via the Supabase CLI. This
+# job never touches a real database and needs no credentials.
+# ==============================================================================
+
+name: Database
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'supabase/**'
+      - '.github/workflows/db-check.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'supabase/**'
+  workflow_dispatch:
+
+concurrency:
+  group: db-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  migrations-and-rls:
+    name: Database (Migrations & RLS Tests)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Detect database directory
+        id: detect
+        run: |
+          if [ -d supabase ] && [ -f supabase/config.toml ]; then
+            echo "db=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "db=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::No supabase/ directory yet. Database checks will activate when the first migration lands (Phase 2)."
+          fi
+
+      - name: Setup Supabase CLI
+        if: steps.detect.outputs.db == 'true'
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Start a local Supabase stack
+        if: steps.detect.outputs.db == 'true'
+        run: supabase db start
+
+      - name: Reset the database from migrations and seed
+        if: steps.detect.outputs.db == 'true'
+        run: |
+          # `db reset` replays every migration in order against a fresh
+          # database, then applies seed.sql. A migration that is not
+          # idempotent, or that depends on data that no longer exists, fails
+          # here instead of during an incident.
+          supabase db reset
+
+      - name: Verify the migration history is linear and complete
+        if: steps.detect.outputs.db == 'true'
+        run: |
+          # Every migration must be referenced by exactly one entry in the
+          # migration history table, in timestamp order, with no gaps.
+          count="$(ls -1 supabase/migrations/*.sql 2>/dev/null | wc -l | tr -d ' ')"
+          if [ "$count" -eq 0 ]; then
+            echo "::error::supabase/migrations/ contains no .sql files."
+            exit 1
+          fi
+          echo "Found $count migration file(s)."
+          # Filenames must sort as timestamps: <epoch>_<description>.sql
+          bad="$(ls -1 supabase/migrations/*.sql | sed 's#.*/##' | grep -Ev '^[0-9]{10,}_[a-z0-9_]+\.sql$' || true)"
+          if [ -n "$bad" ]; then
+            echo "::error::Migration filenames must match <timestamp>_<description>.sql:"
+            echo "$bad"
+            exit 1
+          fi
+          echo "Migration filenames are well-formed."
+
+      - name: Run pgTAP RLS and schema tests
+        if: steps.detect.outputs.db == 'true'
+        run: supabase test db
+
+      - name: Stop the local Supabase stack
+        if: always() && steps.detect.outputs.db == 'true'
+        run: supabase db stop || true

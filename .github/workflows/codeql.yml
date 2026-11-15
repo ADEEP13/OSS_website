@@ -1,0 +1,69 @@
+# ==============================================================================
+# CodeQL — static analysis for security-relevant defects
+#
+# Docs: docs/CI_CD.md
+#
+# CodeQL finds the classes of bug that linting and tests miss: injection,
+# unsafe deserialisation, prototype pollution, credential flow into sinks.
+# Runs on every pull request that touches application code, on every push to
+# main, and on a weekly schedule so newly published queries still see old code.
+# ==============================================================================
+
+name: CodeQL
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  schedule:
+    - cron: '23 5 * * 1'
+  workflow_dispatch:
+
+concurrency:
+  group: codeql-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  analyze:
+    name: CodeQL Analysis
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [javascript-typescript]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Detect application toolchain
+        id: detect
+        run: |
+          if [ -f package.json ] && [ -f pnpm-lock.yaml ]; then
+            echo "app=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "app=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::CodeQL will analyse the application once package.json and pnpm-lock.yaml exist."
+          fi
+
+      - name: Initialise CodeQL
+        if: steps.detect.outputs.app == 'true'
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+          queries: security-and-quality
+
+      - name: Autobuild
+        if: steps.detect.outputs.app == 'true'
+        uses: github/codeql-action/autobuild@v3
+
+      - name: Perform CodeQL analysis
+        if: steps.detect.outputs.app == 'true'
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: /language:${{ matrix.language }}

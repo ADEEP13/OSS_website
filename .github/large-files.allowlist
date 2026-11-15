@@ -1,0 +1,24 @@
+# ==============================================================================
+# .github/large-files.allowlist
+#
+# Explicit, reviewed exceptions to the 1 MiB per-file limit enforced by
+# scripts/checks/check-large-files.sh.
+#
+# Format: <path> <# justification>
+#        Blank lines and lines starting with '#' are ignored.
+#
+# Every entry must answer: why must this live in git, and why can it not be
+# fetched at build time? Large blobs are downloaded by every contributor on
+# every clone, forever — they cannot be removed from history without a rewrite.
+#
+# RULES FOR MAINTAINERS
+#   * Prefer: CDN / object storage / npm dependency / build-time generation.
+#   * If an exception is unavoidable, compress first (pngquant, oxipng, svgo).
+#   * Review this file at every release; delete stale entries.
+# ==============================================================================
+
+# --- Approved exceptions ------------------------------------------------------
+# (none yet — the repository is currently under the limit everywhere)
+#
+# Example entry:
+# public/assets/brand/hero@2x.webp   # 380 KiB hero art; cannot be generated at build time

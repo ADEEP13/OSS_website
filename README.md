@@ -35,6 +35,12 @@
   <a href="https://vercel.com/">
     <img src="https://img.shields.io/badge/Deployed_on-Vercel-000000?style=for-the-badge&logo=vercel&logoColor=white" alt="Vercel Deployment" />
   </a>
+  <a href="https://github.com/Open-Source-Software-Club/OSS_website/actions/workflows/security.yml">
+    <img src="https://img.shields.io/github/actions/workflow/status/Open-Source-Software-Club/OSS_website/security.yml?branch=main&style=for-the-badge&logo=github&label=Security" alt="Security Status" />
+  </a>
+  <a href="https://github.com/Open-Source-Software-Club/OSS_website/blob/main/docs/CI_CD.md">
+    <img src="https://img.shields.io/badge/CI%2FCD-documented-22C55E?style=for-the-badge&logo=githubactions&logoColor=white" alt="CI/CD documented" />
+  </a>
 </p>
 
 ---
@@ -51,6 +57,7 @@
 - [Environment Variables](#-environment-variables)
 - [Project Structure](#-project-structure)
 - [Available Scripts](#-available-scripts)
+- [Continuous Integration & Deployment](#-continuous-integration--deployment)
 - [Contributing](#-contributing)
 - [Maintainers](#-maintainers)
 - [License](#-license)
@@ -297,6 +304,56 @@ Run these scripts from the repository root using `pnpm <script>`:
 | `pnpm format:check` | `prettier --check .` | Verifies code conforms to Prettier formatting |
 | `pnpm typecheck` | `tsc --noEmit` | Validates TypeScript types across the entire project |
 | `pnpm test` | `vitest run` | Runs unit and integration test suites |
+
+---
+
+## 🚦 Continuous Integration & Deployment
+
+Every pull request passes through a quality gate before it can reach `main`.
+The full design is documented in **[docs/CI_CD.md](docs/CI_CD.md)**; this is the
+summary.
+
+### Required checks
+
+| Check | Guarantees |
+|:---|:---|
+| **Repository Hygiene** | no forbidden files, no secrets, no oversized files, valid YAML, valid `CODEOWNERS` |
+| **PR Conventions** | Conventional Commit title, valid branch name, linked issue, reviewable size, linear history |
+| **Verify** | ESLint · TypeScript · Prettier · Vitest · `next build` |
+| **Secret Scan** | no credential material in any tracked file, no private keys |
+| **Dependency Review** | no new moderate-or-higher vulnerability, no disallowed licence |
+
+### What is blocked, mechanically
+
+| Never commit | Enforced by |
+|:---|:---|
+| `.env`, `*.pem`, `*.key`, private keys | `check-forbidden-files.sh`, `check-secrets.sh` |
+| `package-lock.json`, `yarn.lock`, `.npmrc` | `check-lockfiles.sh` |
+| `node_modules/`, `.next/`, `dist/`, `coverage/` | `check-forbidden-files.sh` |
+| `.DS_Store`, `Thumbs.db`, `*.swp`, `.idea/` | `check-forbidden-files.sh` |
+| Files larger than 1 MiB | `check-large-files.sh` |
+| Trailing whitespace, tabs, CRLF, missing final newline | `check-text-hygiene.sh` |
+| Non-Conventional-Commit messages | `check-commit-msg.sh`, `check-pr-meta.sh` |
+| Merge commits and direct pushes to `main` | branch protection ruleset |
+| Unreviewed changes to `supabase/migrations`, `lib/github`, `lib/rbac` | `.github/CODEOWNERS` |
+
+### Run the same gate locally
+
+```bash
+git config core.hooksPath .githooks   # once per clone (or: ./scripts/install-hooks.sh)
+./scripts/checks/run-all.sh           # run everything, on demand
+```
+
+The hooks call the **same scripts** as CI, so what is blocked locally is exactly
+what is blocked in the cloud.
+
+### Deployment
+
+**Vercel** handles deployment natively — a Preview per pull request, Production
+on `main`. GitHub Actions is the quality gate, not the deployer. Production
+database migrations are the one exception: they run through
+`.github/workflows/db-migrate.yml` behind manual approval, never automatically
+from a pull request.
 
 ---
 

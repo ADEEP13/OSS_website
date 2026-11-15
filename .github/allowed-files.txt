@@ -1,0 +1,43 @@
+# ==============================================================================
+# .github/allowed-files.txt
+#
+# Explicit, reviewed exceptions to scripts/checks/check-forbidden-files.sh.
+#
+# Every line is a path or a glob matched against the repository-relative path
+# of a file tracked by git. Blank lines and lines starting with '#' are ignored.
+#
+# WHY THIS FILE EXISTS
+#   A hard "never commit this" list is only trustworthy if the exceptions to it
+#   are as visible as the rule itself. Adding an exception here shows up in the
+#   pull request diff, is covered by CODEOWNERS, and forces a human to write down
+#   why the file is needed. Editing the glob list inside the check script to
+#   make a build go green is exactly the failure mode this file prevents.
+#
+# RULES FOR MAINTAINERS
+#   * One entry per line, most specific first.
+#   * Add a comment explaining the exception.
+#   * If the exception is temporary, say when it expires.
+#   * If you cannot justify it in one sentence, the file does not belong in git.
+# ==============================================================================
+
+# --- Brand assets -------------------------------------------------------------
+# The club logo is a legitimate, small, versioned binary asset. It is the only
+# binary the repository is expected to contain until real media is needed.
+# (Kept for documentation; it is already under the 1 MiB limit, so the check
+# passes without this entry.)
+# public/assets/brand/logo.png
+
+# --- Example environment template --------------------------------------------
+# The ONLY environment file that may be committed. It documents the required
+# variables and must never contain a real value — CI scans it for secrets.
+# .env.example
+# .env.template
+
+# --- Vendored, intentionally committed third-party code -----------------------
+# Add entries here only with CODEOWNERS approval, and prefer adding the
+# dependency to package.json over vendoring it.
+# src/vendor/
+
+# --- Legal / institutional documents ------------------------------------------
+# Files the club is contractually required to keep in the repository.
+# docs/legal/
