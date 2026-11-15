@@ -1,7 +1,6 @@
 <p align="center">
-  <!-- OSS Club Logo -->
   <a href="https://github.com/Open-Source-Software-Club/OSS_website">
-    <img src="https://raw.githubusercontent.com/Open-Source-Software-Club/.github/main/assets/logo.png" alt="Open Source Software Club Logo" width="140" height="140" />
+    <img src="public/assets/brand/logo.png" alt="Open Source Software Club Logo" width="140" height="140" />
   </a>
 </p>
 
@@ -321,13 +320,16 @@ If you discover a security vulnerability within this project, please **do not op
 
 This project is actively maintained by the student leads and faculty coordinator of the Open Source Software Club at Sai Vidya Institute of Technology:
 
-| Role | Name | GitHub / Contact |
+| Role | Name | GitHub |
 |:---|:---|:---|
-| **Faculty Coordinator** | [PLACEHOLDER: Faculty Coordinator Name] | [PLACEHOLDER: faculty-coordinator@saividya.ac.in] |
-| **Club President / Lead** | [PLACEHOLDER: Club President Name] | [@PLACEHOLDER_GITHUB](https://github.com/) |
-| **Technical Lead** | [PLACEHOLDER: Technical Lead Name] | [@PLACEHOLDER_GITHUB](https://github.com/) |
-| **Open Source Lead** | [PLACEHOLDER: Open Source Lead Name] | [@PLACEHOLDER_GITHUB](https://github.com/) |
-| **UI/UX Design Lead** | [PLACEHOLDER: Design Lead Name] | [@PLACEHOLDER_GITHUB](https://github.com/) |
+| **Faculty Coordinator** | [PLACEHOLDER: Faculty Coordinator Name] | — |
+| **Club President** | B V Hitesh Sai | [@Hiteshsai007](https://github.com/Hiteshsai007) |
+| **Vice President** | Tarun N | [@Tarun4201](https://github.com/Tarun4201) |
+| **Vice President** | Harsha B | [@harshab054](https://github.com/harshab054) |
+| **Technical Lead** | Siddharth C | [@NizzyStark](https://github.com/NizzyStark) |
+| **Technical Lead** | Yashwanth Gowda H | [@Yashwanth-202011](https://github.com/Yashwanth-202011) |
+| **Secretary** | Rakshita J K | [@Rakshitha-JK7](https://github.com/Rakshitha-JK7) |
+| **Joint Secretary** | Shreekara Bhatt | [@Shreekar-cloud](https://github.com/Shreekar-cloud) |
 
 Want to become a maintainer? Demonstrate active contributions, thoughtful PR reviews, and community support in accordance with our club charter.
 
