@@ -218,6 +218,21 @@ bash .github/branch-protection/apply.sh             # apply
 bash .github/branch-protection/apply.sh --remove    # remove
 ```
 
+**This needs a personal access token, not a GitHub App token.** `apply.sh`
+probes for write access before it touches anything, because a GitHub App
+installation token with "Administration: read" passes a read probe and then
+fails with `Resource not accessible by integration (HTTP 403)` on the actual
+POST — leaving you with a validated payload that cannot be applied and no
+indication of why. If you hit that, either authenticate with a classic PAT
+carrying the `repo` scope, or import the ruleset by hand:
+
+> **Settings → Rules → Rulesets → New ruleset → Import a ruleset**, then paste
+> the contents of `.github/branch-protection/ruleset.json`.
+
+Everything else in the pipeline works without this step. The ruleset is what
+makes the checks *mandatory*; until it is applied, a contributor with push
+access can still commit straight to `main` and merge a red build.
+
 What it enforces:
 
 | Rule | Why |
@@ -438,11 +453,14 @@ Three rules that are not negotiable:
   push; the workflow is what tells you it happened.
 - **The `accessibility` job is advisory.** Lighthouse in CI is a rough proxy; the
   roadmap still requires a manual NVDA/VoiceOver pass before launch.
-- **Branch protection is not applied yet.** The ruleset is ready in
-  `.github/branch-protection/ruleset.json` and `apply.sh` will apply it, but it
-  is deliberately not switched on in this change: turning it on is a
-  repository-wide setting change that should be a conscious decision by whoever
-  administers the organisation. Run `apply.sh --dry-run` first.
+- **Branch protection still needs one human action.** The ruleset is written,
+  validated and proven — every one of the five required checks passes on PR
+  #11 — but it cannot be applied from an automation token. GitHub App
+  installation tokens get `Resource not accessible by integration` on the
+  rulesets API even with admin permission on the repository. Somebody has to
+  run `apply.sh` with a personal access token, or import `ruleset.json` through
+  Settings → Rules → Rulesets. Until then the gate is advisory: CI reports, but
+  nothing prevents a push to `main`.
 - **`required_signatures` is off by default.** See §5.
 - **`@Open-Source-Software-Club/*` teams do not exist yet**, so CODEOWNERS uses
   individual usernames. Switching to teams is a one-line-per-section change,

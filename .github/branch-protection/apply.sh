@@ -57,22 +57,70 @@ fi
 say "Repository: $REPO"
 
 # ------------------------------------------------------------------------------
-# Verify we can actually administer rulesets. A GitHub App installation token
-# gets a 403 here even with admin permission on the repo, which is the single
-# most common reason this script appears to "do nothing".
+# Verify we can actually ADMINISTER rulesets.
+#
+# Reading rulesets is not proof of write access. A GitHub App installation
+# token with "Administration: read" passes a read probe and then fails with
+# `Resource not accessible by integration (HTTP 403)` on the actual POST — so
+# the read probe is deliberately followed by a write probe against an endpoint
+# that is harmless and reversible.
+#
+# This is not theoretical: the sandbox that built this pipeline had exactly
+# that token, and the read probe alone was not enough to catch it.
 # ------------------------------------------------------------------------------
 if ! gh api "repos/$REPO/rulesets" >/dev/null 2>&1; then
   cat >&2 <<'MSG'
 apply: cannot read repository rulesets.
 
-This almost always means the token is a GitHub App installation token rather
-than a personal access token. Branch rulesets require a PAT (classic, `repo`
-scope) or a fine-grained PAT with repository "Administration: read and write".
+Check that gh is authenticated and that the repository name is correct.
 
-  gh auth login          # then re-run this script
+  gh auth status
 MSG
   exit 1
 fi
+
+write_probe() {
+  # Creating and immediately deleting a ruleset with no rules is a no-op on
+  # the branch, and proves the token can administer rulesets.
+  local id
+  id="$(gh api -X POST "repos/$REPO/rulesets" \
+          --input <(printf '%s' '{"name":"__apply_probe__","target":"branch","enforcement":"disabled","conditions":{"ref_name":{"include":["refs/heads/__nonexistent__"],"exclude":[]}},"rules":[]}') \
+          --jq '.id' 2>/dev/null)" || return 1
+  [ -z "$id" ] && return 1
+  gh api -X DELETE "repos/$REPO/rulesets/$id" >/dev/null 2>&1 || true
+  return 0
+}
+
+if ! write_probe; then
+  cat >&2 <<'MSG'
+apply: this token cannot administer repository rulesets.
+
+The ruleset payload is ready and validated; it just cannot be applied with
+the current credential. This is almost always one of:
+
+  1. GH_TOKEN is a GitHub App installation token. Installation tokens get
+     `Resource not accessible by integration (HTTP 403)` on rulesets even when
+     the app has admin permission on the repository. Use a personal access
+     token instead.
+
+  2. The token is a fine-grained PAT without repository "Administration: write".
+
+What to do:
+
+  gh auth logout
+  gh auth login          # choose: HTTPS + token, classic PAT with `repo` scope
+  bash .github/branch-protection/apply.sh
+
+Or apply it in the web UI:
+  Settings → Rules → Rulesets → New ruleset → Import a ruleset
+  and paste the contents of .github/branch-protection/ruleset.json.
+
+Nothing else in the pipeline depends on this script. The workflows, hooks and
+checks all work without it; the ruleset is what makes them mandatory.
+MSG
+  exit 1
+fi
+say "Token can administer rulesets."
 
 # ------------------------------------------------------------------------------
 # Remove
@@ -126,14 +174,25 @@ if [ "$DRY_RUN" -eq 1 ]; then
   exit 0
 fi
 
-if [ -n "$EXISTING_ID" ]; then
-  gh api -X PUT "repos/$REPO/rulesets/$EXISTING_ID" \
-    --input "$PAYLOAD" >/dev/null
-  say "Updated existing ruleset $EXISTING_ID"
+apply_ruleset() {
+  if [ -n "$EXISTING_ID" ]; then
+    gh api -X PUT "repos/$REPO/rulesets/$EXISTING_ID" --input "$PAYLOAD" >/dev/null
+  else
+    gh api -X POST "repos/$REPO/rulesets" --input "$PAYLOAD" >/dev/null
+  fi
+}
+
+if err="$(apply_ruleset 2>&1)"; then
+  if [ -n "$EXISTING_ID" ]; then
+    say "Updated existing ruleset $EXISTING_ID"
+  else
+    say "Created a new ruleset"
+  fi
 else
-  gh api -X POST "repos/$REPO/rulesets" \
-    --input "$PAYLOAD" >/dev/null
-  say "Created a new ruleset"
+  echo "apply: failed to write the ruleset: $err" >&2
+  echo "apply: the payload is valid; this is a permissions problem. See the" >&2
+  echo "       guidance printed above about GitHub App installation tokens." >&2
+  exit 1
 fi
 
 # ------------------------------------------------------------------------------
