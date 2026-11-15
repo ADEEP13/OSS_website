@@ -1,0 +1,45 @@
+name: Documentation
+description: Propose documentation improvements, additions, or corrections
+title: "[Docs]: "
+labels: ["documentation"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for helping us improve our documentation! Good documentation helps onboarding new open-source contributors and club members.
+  - type: dropdown
+    id: doc-type
+    attributes:
+      label: Documentation Type
+      description: What type of documentation change is being requested?
+      options:
+        - New documentation
+        - Update existing
+        - Fix error
+        - Improve clarity
+    validations:
+      required: true
+  - type: input
+    id: location
+    attributes:
+      label: Location
+      description: Which file, page, section, or URL requires changes?
+      placeholder: e.g., README.md, docs/setup.md, /events page, or components/ui/button.tsx
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: Describe what needs to be changed, added, or corrected in the documentation.
+      placeholder: Provide a clear explanation of what is missing, outdated, or inaccurate...
+    validations:
+      required: true
+  - type: textarea
+    id: suggested-content
+    attributes:
+      label: Suggested Content
+      description: If you have draft content, revised text, or markdown snippets, please provide them here.
+      placeholder: Paste your proposed wording, markdown snippets, or documentation draft here...
+    validations:
+      required: false

@@ -1,0 +1,169 @@
+# ==============================================================================
+# GitHub Actions CI Workflow for OSS Club Website
+# Open Source Software Club at Sai Vidya Institute of Technology, Bengaluru
+# Org: https://github.com/Open-Source-Software-Club
+# Repo: https://github.com/Open-Source-Software-Club/OSS_website
+#
+# Defined package.json scripts executed in this workflow:
+#   - lint: next lint
+#   - type-check: tsc --noEmit
+#   - test: vitest run
+#   - build: next build
+# ==============================================================================
+
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  lint-and-typecheck:
+    name: Lint & Typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node.js 18
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run linter (pnpm lint)
+        run: pnpm lint
+
+      - name: Run TypeScript type check (pnpm type-check)
+        run: pnpm type-check
+
+  test:
+    name: Unit & Integration Tests
+    runs-on: ubuntu-latest
+    needs: lint-and-typecheck
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node.js 18
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run test suite with coverage (pnpm test -- --coverage)
+        run: pnpm test -- --coverage
+
+      - name: Upload test coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-coverage-report
+          path: coverage/
+          retention-days: 14
+
+  build:
+    name: Build Next.js Application
+    runs-on: ubuntu-latest
+    needs: lint-and-typecheck
+    env:
+      NEXT_TELEMETRY_DISABLED: 1
+      NEXT_PUBLIC_SUPABASE_URL: https://[PLACEHOLDER].supabase.co
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: [PLACEHOLDER_SUPABASE_ANON_KEY]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node.js 18
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build Next.js application (pnpm build)
+        run: pnpm build
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: next-build-output
+          path: .next/
+          retention-days: 7
+
+  accessibility:
+    name: Accessibility Audit (Lighthouse CI)
+    runs-on: ubuntu-latest
+    needs: build
+    env:
+      NEXT_TELEMETRY_DISABLED: 1
+      NEXT_PUBLIC_SUPABASE_URL: https://[PLACEHOLDER].supabase.co
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: [PLACEHOLDER_SUPABASE_ANON_KEY]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node.js 18
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: next-build-output
+          path: .next/
+
+      - name: Run Lighthouse CI accessibility audit
+        uses: treosh/lighthouse-ci-action@v12
+        with:
+          startServerCommand: pnpm start
+          startServerReadyPattern: 'ready on|Ready on|Local:'
+          startServerReadyTimeout: 30000
+          url: |
+            http://localhost:3000/
+          uploadArtifacts: true
+          temporaryPublicStorage: false
+          assertions: |
+            categories:accessibility:
+              minScore: 0.90

@@ -1,0 +1,146 @@
+# ==============================================================================
+# Git Ignore Configuration
+# Repository: Open-Source-Software-Club / OSS_website
+# Stack: Next.js 14+ (App Router), TypeScript, Tailwind CSS, Supabase, Vercel
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# Dependencies & Package Managers
+# ------------------------------------------------------------------------------
+node_modules/
+.pnpm-store/
+jspm_packages/
+web_modules/
+
+# ------------------------------------------------------------------------------
+# Next.js Build & Compilation Artifacts
+# ------------------------------------------------------------------------------
+.next/
+out/
+build/
+dist/
+.turbo/
+.cache/
+
+# ------------------------------------------------------------------------------
+# Environment Variables & Secrets (CRITICAL: Never commit secrets)
+# ------------------------------------------------------------------------------
+.env
+.env*.local
+.env.development
+.env.test
+.env.production
+.env.staging
+*.env
+*.env.*
+*.pem
+*.key
+*.cert
+*.crt
+
+# Explicitly ensure the example environment template IS tracked by Git
+!.env.example
+
+# ------------------------------------------------------------------------------
+# Logging & Debug Files
+# ------------------------------------------------------------------------------
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+*.log
+logs/
+
+# ------------------------------------------------------------------------------
+# Testing, Coverage & Playwright
+# ------------------------------------------------------------------------------
+coverage/
+.nyc_output/
+test-results/
+playwright-report/
+blob-report/
+playwright/.cache/
+
+# ------------------------------------------------------------------------------
+# TypeScript Compiler Cache
+# ------------------------------------------------------------------------------
+*.tsbuildinfo
+
+# ------------------------------------------------------------------------------
+# Deployment Platforms & Cloud Providers
+# ------------------------------------------------------------------------------
+.vercel/
+.serverless/
+
+# ------------------------------------------------------------------------------
+# Supabase Local Development
+# ------------------------------------------------------------------------------
+supabase/.temp/
+supabase/.branches/
+
+# ------------------------------------------------------------------------------
+# Operating System Artifacts
+# ------------------------------------------------------------------------------
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V100
+.Trashes
+
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+desktop.ini
+$RECYCLE.BIN/
+*.lnk
+
+# Linux
+*~
+.fuse_hidden*
+.directory
+.Trash-*
+
+# ------------------------------------------------------------------------------
+# IDEs, Code Editors & Tooling Cache
+# ------------------------------------------------------------------------------
+# Visual Studio Code
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+*.code-workspace
+
+# JetBrains (IntelliJ, WebStorm, etc.)
+.idea/
+*.iws
+*.iml
+*.ipr
+
+# Vim & Neovim
+*.swp
+*.swo
+*~
+*.sw?
+Session.vim
+.netrwhist
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# ------------------------------------------------------------------------------
+# Miscellaneous & Temporary Files
+# ------------------------------------------------------------------------------
+.eslintcache
+.stylelintcache
+*.bak
+*.tmp
+*.temp
+*.patch
+*.diff

@@ -1,0 +1,98 @@
+name: Bug Report
+description: Create a report to help us fix a bug in the OSS Club Website
+title: "[Bug]: "
+labels: ["bug", "needs triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for reporting a bug! Please fill out this form as completely as possible to help us diagnose and resolve the issue quickly.
+  - type: textarea
+    id: bug-description
+    attributes:
+      label: Bug Description
+      description: A clear and concise description of the bug encountered.
+      placeholder: Describe the problem clearly, including what happened and any visual or functional glitches...
+    validations:
+      required: true
+  - type: textarea
+    id: steps-to-reproduce
+    attributes:
+      label: Steps to Reproduce
+      description: Step-by-step instructions to reproduce the bug.
+      placeholder: |
+        1. Navigate to '...'
+        2. Click on '...'
+        3. Scroll down to '...'
+        4. Observe the error
+    validations:
+      required: true
+  - type: textarea
+    id: expected-behavior
+    attributes:
+      label: Expected Behavior
+      description: A clear description of what you expected to happen.
+      placeholder: Describe what should have happened according to expected functionality or design...
+    validations:
+      required: true
+  - type: textarea
+    id: actual-behavior
+    attributes:
+      label: Actual Behavior
+      description: A clear description of what actually happened instead.
+      placeholder: Describe what occurred instead, including any error messages, console logs, or unexpected UI states...
+    validations:
+      required: true
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: Screenshots or Recordings
+      description: If applicable, attach screenshots, GIFs, or screen recordings illustrating the bug. Drag and drop files directly here.
+      placeholder: Drag and drop or paste image/video links here...
+    validations:
+      required: false
+  - type: dropdown
+    id: browser
+    attributes:
+      label: Browser
+      description: Select the web browser where the issue occurred.
+      options:
+        - Chrome
+        - Firefox
+        - Safari
+        - Edge
+        - Other
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating System
+      description: Select the operating system on which the issue was observed.
+      options:
+        - Windows
+        - macOS
+        - Linux
+        - iOS
+        - Android
+    validations:
+      required: true
+  - type: dropdown
+    id: screen-size
+    attributes:
+      label: Screen Size
+      description: Select the device viewport size where the issue was observed.
+      options:
+        - Mobile
+        - Tablet
+        - Desktop
+    validations:
+      required: true
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Additional Context
+      description: Add any other context about the problem here (e.g., user authentication state, URL path, device model).
+      placeholder: Any other relevant information or context...
+    validations:
+      required: false

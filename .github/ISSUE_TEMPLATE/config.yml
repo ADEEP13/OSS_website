@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Community Discussions & Questions
+    url: https://github.com/Open-Source-Software-Club/OSS_website/discussions
+    about: Ask questions, share ideas, get help, or discuss features with OSS Club members before filing an issue.
+  - name: Report a Security Vulnerability
+    url: https://github.com/Open-Source-Software-Club/OSS_website/security/policy
+    about: Please report security vulnerabilities privately according to our security policy rather than opening a public issue.
+  - name: OSS Club Community & Events
+    url: https://github.com/Open-Source-Software-Club
+    about: Learn more about the Open Source Software Club at Sai Vidya Institute of Technology, Bengaluru, and how to get involved.

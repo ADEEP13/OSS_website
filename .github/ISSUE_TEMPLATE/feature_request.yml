@@ -1,0 +1,57 @@
+name: Feature Request
+description: Propose a new feature, improvement, or idea for the OSS Club Website
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for suggesting an idea! Please share details about the proposed feature and how it benefits members and visitors of the OSS Club at SVIT.
+  - type: textarea
+    id: feature-description
+    attributes:
+      label: Feature Description
+      description: A clear and concise description of the feature or enhancement you are proposing.
+      placeholder: Describe what feature or improvement you would like to see added...
+    validations:
+      required: true
+  - type: textarea
+    id: problem-solved
+    attributes:
+      label: Problem It Solves
+      description: What specific problem, limitation, or pain point does this feature address?
+      placeholder: I am always frustrated when [...] or Currently there is no way for members to [...]
+    validations:
+      required: true
+  - type: textarea
+    id: proposed-solution
+    attributes:
+      label: Proposed Solution
+      description: Describe how you envision this feature working in practice. Include user flows, component behavior, or architectural ideas.
+      placeholder: A clear description of what you want to happen and how it should work...
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives-considered
+    attributes:
+      label: Alternatives Considered
+      description: Any alternative solutions, libraries, or workaround approaches you have considered.
+      placeholder: A clear description of any alternative solutions or features you've considered...
+    validations:
+      required: false
+  - type: textarea
+    id: design-mockups
+    attributes:
+      label: Design Mockups / Wireframes
+      description: If you have visual mockups, Figma links, sketches, or wireframes, attach them here.
+      placeholder: Paste links (e.g., Figma) or drag-and-drop wireframes/mockups here...
+    validations:
+      required: false
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Additional Context
+      description: Add any other context, technical references, or club-specific requirements here.
+      placeholder: Any other relevant information, target release milestones, etc.
+    validations:
+      required: false
