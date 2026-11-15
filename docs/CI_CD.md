@@ -319,6 +319,12 @@ None of these are required for the gate to work; they upgrade specific checks.
 | Environment secret | `SUPABASE_PROJECT_REF` | production migrations |
 | Repository secret | `ORG_LABELS_SYNC_TOKEN` | enables organisation-wide label sync |
 
+The `Dependency Review` check additionally needs the **dependency graph** to be
+enabled: *Settings → Code security → Dependency graph*. When it is off, the
+action fails with an opaque "not supported on this repository" error, so the job
+checks first and reports exactly what to enable. It is also a no-op until a
+`package.json` exists — there are no dependencies to review yet.
+
 Also turn on, in **Settings → Code security**:
 
 - **Secret scanning** and **push protection**. This catches a secret *before* it
@@ -351,6 +357,15 @@ bash scripts/checks/check-pr-meta.sh          # needs the PR_* env vars
 ---
 
 ## 10. Extending the pipeline
+
+**How actionlint is run**
+
+`.github/workflows/ci.yml` downloads a pinned `actionlint` release binary rather
+than running the Docker image. `docker run` on GitHub-hosted runners mounts the
+workspace with the runner's uid, which the image's non-root user cannot read,
+and the failure surfaces as an opaque exit code 125 with no indication of which
+step failed. The binary is fetched with `curl`, pinned by version, and run with
+`--shellcheck= --pyflakes=` so the check depends on no external analyser.
 
 **Adding a new check**
 
@@ -394,6 +409,12 @@ Three rules that are not negotiable:
    name. Pass them through `env:` and reference them as `"$VAR"`.
 2. **Set `permissions:`.** The default token scope is broader than almost any
    job needs.
+4. **Do not gate a cheap job on an expensive one.** `PR Conventions` reports on
+   the title, the branch name and the PR size — all things a contributor can fix
+   without touching code. Gating it behind `Repository Hygiene` left it
+   "skipped" whenever hygiene failed, which told the contributor nothing. Cheap
+   diagnostic jobs run unconditionally; expensive ones (`Verify`, which needs a
+   full install and build) are allowed to depend on them.
 3. **Always report a conclusion.** If a job has nothing to do, succeed with a
    `::notice::` rather than being skipped.
 

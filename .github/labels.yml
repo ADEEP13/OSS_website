@@ -149,10 +149,6 @@
   color: '93A09A'
   description: 'Improvements or additions to documentation'
 
-- name: 'good first issue'
-  color: '7CE3A6'
-  description: 'Welcoming entry-level task, ideal for a first open-source contribution'
-
 # ------------------------------------------------------------------------------
 # Housekeeping
 # ------------------------------------------------------------------------------

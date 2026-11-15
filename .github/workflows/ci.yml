@@ -105,6 +105,19 @@ jobs:
           print("All YAML files parse cleanly.")
           PY
 
+      # actionlint is fetched as a pinned release binary rather than run from
+      # the Docker image. `docker run` on the hosted runners mounts the
+      # workspace with the runner's uid, which the image's non-root user cannot
+      # read, and the resulting failure surfaces as an opaque exit code 125.
+      - name: Install actionlint
+        env:
+          ACTIONLINT_VERSION: '1.7.12'
+        run: |
+          curl --fail --silent --show-error --location \
+            "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/actionlint_${ACTIONLINT_VERSION#v}_linux_amd64.tar.gz" \
+            | tar -xz actionlint
+          ./actionlint --version
+
       - name: Lint workflow structure with actionlint
         run: |
           # --shellcheck= and --pyflakes= disable the optional external
@@ -115,10 +128,9 @@ jobs:
           # The 'vars' ignore covers actionlint builds whose context table
           # predates the `vars` repository-variable context (added to GitHub
           # Actions in 2022 and to actionlint in v1.6.30). `vars` is valid in
-          # jobs.<job_id>.env and jobs.<job_id>.environment; the pinned image
+          # jobs.<job_id>.env and jobs.<job_id>.environment; the pinned binary
           # understands it, but the ignore keeps this check green everywhere.
-          docker run --rm --volume "$PWD:/repo" --workdir /repo \
-            rhysd/actionlint:v1.7.12 -color -shellcheck= -pyflakes= \
+          ./actionlint -color -shellcheck= -pyflakes= \
             -ignore 'undefined variable "vars"'
 
       - name: Validate CODEOWNERS
@@ -158,7 +170,11 @@ jobs:
   pr-conventions:
     name: PR Conventions
     runs-on: ubuntu-latest
-    needs: hygiene
+    # Deliberately NOT `needs: hygiene`. This job is cheap and reports on things
+    # a contributor can fix without touching the code (title, branch name, PR
+    # size), so it must still run — and still report a conclusion — when the
+    # hygiene job has already failed. Gating it on hygiene would leave it
+    # "skipped", and a skipped check tells a contributor nothing.
     if: github.event_name == 'pull_request'
     timeout-minutes: 15
     steps:

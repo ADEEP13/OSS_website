@@ -83,6 +83,15 @@ jobs:
   # Required check: "Dependency Review"
   #
   # Only runs on pull requests — there is no diff to review on a push.
+  #
+  # Two things gate this job, and both are reported as notices rather than
+  # skips, because a skipped check cannot be a required status check:
+  #
+  #   1. There must be a dependency manifest. Until Phase 0 scaffolding lands
+  #      there are literally no dependencies to review.
+  #   2. The GitHub dependency graph must be enabled. When it is not, the
+  #      action fails with an opaque "not supported on this repository" error,
+  #      so we check first and say exactly what to enable and where.
   # ---------------------------------------------------------------------------
   dependency-review:
     name: Dependency Review
@@ -93,7 +102,33 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Detect a dependency manifest
+        id: detect
+        run: |
+          if [ -f package.json ] || [ -f pnpm-lock.yaml ]; then
+            echo "deps=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "deps=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::No package.json yet — there are no dependencies to review. This check activates automatically when Phase 0 scaffolding lands."
+          fi
+
+      - name: Verify the dependency graph is enabled
+        if: steps.detect.outputs.deps == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # The SBOM endpoint returns 404 when the dependency graph is off,
+          # which actions/dependency-review-action reports as "Dependency
+          # review is not supported on this repository". Checking first turns
+          # that into one actionable sentence.
+          if ! gh api "repos/${{ github.repository }}/dependency-graph/sbom" >/dev/null 2>&1; then
+            echo "::error::The GitHub dependency graph is disabled for this repository, so 'Dependency Review' cannot run. Enable it at Settings → Code security → Dependency graph."
+            exit 1
+          fi
+          echo "Dependency graph is enabled."
+
       - name: Review dependency changes
+        if: steps.detect.outputs.deps == 'true'
         uses: actions/dependency-review-action@v4
         with:
           fail-on-severity: moderate
@@ -101,12 +136,16 @@ jobs:
           comment-summary-in-pr: always
 
       - name: Audit the dependency tree
-        if: hashFiles('pnpm-lock.yaml') != ''
+        if: steps.detect.outputs.deps == 'true'
+        env:
+          PNPM_VERSION: '9.15.9'
         run: |
-          npm install --global "pnpm@9.15.9"
+          npm install --global "pnpm@$PNPM_VERSION"
           pnpm install --frozen-lockfile
           # High and critical only: this is a student club website, and blocking
           # a contribution over a low-severity transitive advisory helps nobody.
+          # A failure here is a warning, not a merge blocker, because the
+          # Dependency Review action above is the authoritative gate.
           pnpm audit --audit-level high || {
             echo "::warning::'pnpm audit' reported high or critical advisories. Update the dependency or document the exception."
           }
